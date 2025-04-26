@@ -1,0 +1,16 @@
+export type TypeEventAvailable =
+  | "click"
+  | "mousemove"
+  | "mouseout"
+  | "mousedown"
+  | "mouseup"
+  | "mouseenter"
+  | "mouseover"
+  | "touchstart"
+  | "touchmove"
+  | "touchend"
+  | "change"
+  | "input"
+  | "keyup"
+  | "keydown"
+  | "error";

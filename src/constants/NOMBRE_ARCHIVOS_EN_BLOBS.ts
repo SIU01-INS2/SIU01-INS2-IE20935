@@ -1,0 +1,1 @@
+export const NOMBRE_ARCHIVO_CON_DATOS_ASISTENCIA_DIARIOS = "datos-asistencia-hoy-ie20935.json";

@@ -1,0 +1,15 @@
+export enum ColoresSistema {
+  // COLOR_INTERFAZ = "#dd3524", COLOR VARIABLE
+  ROJO_OSCURO = "#c82333",
+  VERDE_PRINCIPAL = "#28a745",
+  AZUL_PRINCIPAL = "#007bff",
+  VIOLETA_PRINCIPAL = "#9747ff",
+  NARANJA_PRINCIPAL = "#fd7e14",
+  AMARILLO_EDICIONES = "#ffc300",
+  VERDE_BRILLOSO = "#00ff6f",
+  GRIS_OSCURO = "#888",
+  GRIS_INTERMEDIO = "#c0c0c0",
+  GRIS_CLARO = "#e3e3e3",
+  BLANCO = "#fff",
+  NEGRO = "#000",
+}

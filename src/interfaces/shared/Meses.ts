@@ -1,0 +1,43 @@
+export enum Meses {
+  Enero = 1,
+  Febrero = 2,
+  Marzo = 3,
+  Abril = 4,
+  Mayo = 5,
+  Junio = 6,
+  Julio = 7,
+  Agosto = 8,
+  Septiembre = 9,
+  Octubre = 10,
+  Noviembre = 11,
+  Diciembre = 12,
+}
+export const mesesTextos: Record<Meses, string> = {
+  [Meses.Enero]: "Enero",
+  [Meses.Febrero]: "Febrero",
+  [Meses.Marzo]: "Marzo",
+  [Meses.Abril]: "Abril",
+  [Meses.Mayo]: "Mayo",
+  [Meses.Junio]: "Junio",
+  [Meses.Julio]: "Julio",
+  [Meses.Agosto]: "Agosto",
+  [Meses.Septiembre]: "Septiembre",
+  [Meses.Octubre]: "Octubre",
+  [Meses.Noviembre]: "Noviembre",
+  [Meses.Diciembre]: "Diciembre",
+};
+
+export const mesesTextosCortos: Record<Meses, string> = {
+  [Meses.Enero]: "Ene",
+  [Meses.Febrero]: "Feb",
+  [Meses.Marzo]: "Mar",
+  [Meses.Abril]: "Abr",
+  [Meses.Mayo]: "May",
+  [Meses.Junio]: "Jun",
+  [Meses.Julio]: "Jul",
+  [Meses.Agosto]: "Ago",
+  [Meses.Septiembre]: "Sep",
+  [Meses.Octubre]: "Oct",
+  [Meses.Noviembre]: "Nov",
+  [Meses.Diciembre]: "Dic",
+};
