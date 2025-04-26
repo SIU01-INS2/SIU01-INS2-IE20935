@@ -3,7 +3,7 @@ import React from 'react'
 const AulaSelector = () => {
   return (
     <div>
-        HOLA MUNDO
+        HOLA MUNDO DE 2
     </div>
   )
 }
