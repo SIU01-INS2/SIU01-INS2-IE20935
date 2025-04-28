@@ -27,7 +27,7 @@ jobs:
           echo "Configurando repositorio de destino 1..."
           mkdir -p temp-repo1
           cd temp-repo1
-          git clone https://x-access-token:${{ secrets.SIU01_INS1_REPOSITORIO_PRODUCCION_TOKEN }}@github.com/SIU01-ASUNCION8-SIASIS/SIU01-INS1-IE20935.git .
+          git clone https://x-access-token:${{ secrets.SIU01_INS1_REPOSITORIO_PRODUCCION_TOKEN }}@github.com/IE20935-SIASIS-SIU01-INS1/SIU01-INS1-IE20935.git .
           
           echo "Copiando contenido actual sobre el repositorio destino 1..."
           find .. -mindepth 1 -maxdepth 1 -not -path "../.git" -not -path "../temp-repo1" -not -path "../temp-repo2" -exec cp -r {} . \;
@@ -53,7 +53,7 @@ jobs:
           echo "Configurando repositorio de destino 2..."
           mkdir -p temp-repo2
           cd temp-repo2
-          git clone https://x-access-token:${{ secrets.SIU01_INS2_REPOSITORIO_PRODUCCION_TOKEN }}@github.com/SIU01-INS2/SIU01-INS2-IE20935.git .
+          git clone https://x-access-token:${{ secrets.SIU01_INS2_REPOSITORIO_PRODUCCION_TOKEN }}@github.com/IE20935-SIASIS-SIU01-INS2/SIU01-INS2-IE20935.git .
           
           echo "Copiando contenido actual sobre el repositorio destino 2..."
           find .. -mindepth 1 -maxdepth 1 -not -path "../.git" -not -path "../temp-repo1" -not -path "../temp-repo2" -exec cp -r {} . \;
