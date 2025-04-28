@@ -1046,8 +1046,8 @@ export class AsistenciaDePersonalIDB {
 
   /**
    * Marca la asistencia de entrada o salida para un personal específico
-   * usando el ID de registro mensual incluido en los datos
-   * @param datos Datos completos del registro de asistencia con el ID de registro mensual
+   * usando el índice compuesto de rol, dni, mes y modo de registro
+   * @param datos Datos del registro de asistencia
    * @returns Promesa que se resuelve cuando se completa la operación
    */
   public async marcarAsistencia({
@@ -1058,13 +1058,11 @@ export class AsistenciaDePersonalIDB {
     try {
       // Extraer los datos del objeto
       const {
-        Id_Registro_Mensual,
         ModoRegistro: modoRegistro,
         DNI: dni,
         Rol: rol,
         Dia: dia,
         Detalles,
-        esNuevoRegistro,
       } = datos;
 
       // Determinar el tipo de personal según el rol
@@ -1087,21 +1085,37 @@ export class AsistenciaDePersonalIDB {
         desfaseSegundos: Detalles!.DesfaseSegundos,
       };
 
-      // Actualizar el registro diario con el ID proporcionado
-      await this.actualizarRegistroDiario(
-        tipoPersonal,
-        modoRegistro,
-        dni,
-        mes,
-        dia,
-        registro,
-        Id_Registro_Mensual,
-        esNuevoRegistro
-      );
+
+        // Si no tenemos ID, intentamos obtenerlo del almacén
+        const idRegistroMensual = await this.obtenerIdRegistroMensual(
+          tipoPersonal,
+          modoRegistro,
+          dni,
+          mes
+        );
+
+        if (idRegistroMensual) {
+          // Si encontramos un ID existente, lo usamos
+          await this.actualizarRegistroDiario(
+            tipoPersonal,
+            modoRegistro,
+            dni,
+            mes,
+            dia,
+            registro,
+            idRegistroMensual,
+            false // No es nuevo registro
+          );
+        } else {
+          // Si no hay ID existente, que podemos hacer?
+
+
+        }
+      
 
       // Registrar en la consola
       console.log(
-        `Asistencia marcada: ${rol} ${dni} - ${modoRegistro} - ${estado} - ID Registro: ${Id_Registro_Mensual}`
+        `Asistencia marcada: ${rol} ${dni} - ${modoRegistro} - ${estado}`
       );
     } catch (error) {
       this.handleError(error, "marcarAsistencia", {
@@ -1109,7 +1123,6 @@ export class AsistenciaDePersonalIDB {
         dni: datos.DNI,
         rol: datos.Rol,
         dia: datos.Dia,
-        idRegistro: datos.Id_Registro_Mensual,
       });
       throw error;
     }
@@ -1635,7 +1648,6 @@ export class AsistenciaDePersonalIDB {
 
   /**
    * Sincroniza las asistencias registradas en Redis con la base de datos local IndexedDB
-   * Solo añade los registros que no existen localmente y tienen un registro mensual existente
    * @param datosRedis Datos de asistencia obtenidos desde Redis
    * @returns Promesa que resuelve a un objeto con estadísticas de sincronización
    */
@@ -1645,7 +1657,6 @@ export class AsistenciaDePersonalIDB {
     totalRegistros: number;
     registrosNuevos: number;
     registrosExistentes: number;
-    noRegistroMensual: number;
     errores: number;
   }> {
     // Estadísticas de sincronización
@@ -1653,7 +1664,6 @@ export class AsistenciaDePersonalIDB {
       totalRegistros: datosRedis.Resultados.length,
       registrosNuevos: 0,
       registrosExistentes: 0,
-      noRegistroMensual: 0,
       errores: 0,
     };
 
@@ -1695,24 +1705,8 @@ export class AsistenciaDePersonalIDB {
             continue;
           }
 
-          // Verificar si existe un registro mensual para este personal y mes
-          const idRegistroMensual = await this.obtenerIdRegistroMensual(
-            tipoPersonal,
-            datosRedis.ModoRegistro,
-            resultado.DNI,
-            mesActual
-          );
-
-          if (!idRegistroMensual) {
-            // No existe un registro mensual, no podemos agregar el registro diario
-            stats.noRegistroMensual++;
-            continue;
-          }
-
           // Crear un registro compatible con nuestra interfaz local
           const registro: RegistroAsistenciaUnitariaPersonal = {
-            esNuevoRegistro: false, // No es nuevo, estamos actualizando un registro mensual existente
-            Id_Registro_Mensual: idRegistroMensual,
             ModoRegistro: datosRedis.ModoRegistro,
             DNI: resultado.DNI,
             Rol: datosRedis.Actor,
@@ -1721,6 +1715,7 @@ export class AsistenciaDePersonalIDB {
               Timestamp: resultado.Detalles.Timestamp,
               DesfaseSegundos: resultado.Detalles.DesfaseSegundos,
             },
+            esNuevoRegistro: true,
           };
 
           // Guardar el registro en la base de datos local

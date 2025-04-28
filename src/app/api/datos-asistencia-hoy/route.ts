@@ -66,7 +66,7 @@ export async function GET(req: NextRequest) {
 
       try {
         // Obtener el ID de Google Drive desde Redis
-        const archivoDatosAsistenciaHoyGoogleDriveID = await redisClient.get(
+        const archivoDatosAsistenciaHoyGoogleDriveID = await redisClient().get(
           NOMBRE_ARCHIVO_CON_DATOS_ASISTENCIA_DIARIOS
         );
 

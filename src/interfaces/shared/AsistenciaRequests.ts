@@ -4,7 +4,6 @@ import { Meses } from "./Meses";
 import { ActoresSistema } from "./ActoresSistema";
 
 export interface RegistroAsistenciaUnitariaPersonal {
-  Id_Registro_Mensual: number;
   ModoRegistro: ModoRegistro;
   DNI: string;
   Rol: RolesSistema | ActoresSistema;

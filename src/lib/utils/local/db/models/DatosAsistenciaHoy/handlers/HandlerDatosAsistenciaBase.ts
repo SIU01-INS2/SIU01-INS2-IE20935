@@ -21,10 +21,6 @@ export class HandlerAsistenciaBase {
     return this.data.FueraAñoEscolar;
   }
 
-  public estaEnVacacionesMedioAnio(): false | RangoFechas {
-    return this.data.DentroVacionesMedioAño;
-  }
-
   public getFechaUTC(): Date {
     return new Date(alterarUTCaZonaPeruana(String(this.data.FechaUTC)));
   }

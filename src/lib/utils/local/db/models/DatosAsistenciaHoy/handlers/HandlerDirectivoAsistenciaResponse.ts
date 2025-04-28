@@ -319,12 +319,12 @@ export class HandlerDirectivoAsistenciaResponse extends HandlerAsistenciaBase {
               modoRegistro === ModoRegistro.Entrada &&
               personal.Horario_Laboral_Entrada
             ) {
-              horaProgramada = new Date(personal.Horario_Laboral_Entrada);
+              horaProgramada = new Date(personal.Hora_Entrada_Dia_Actual);
             } else if (
               modoRegistro === ModoRegistro.Salida &&
               personal.Horario_Laboral_Salida
             ) {
-              horaProgramada = new Date(personal.Horario_Laboral_Salida);
+              horaProgramada = new Date(personal.Hora_Salida_Dia_Actual);
             }
           }
           break;

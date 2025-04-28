@@ -481,8 +481,16 @@ model T_Fechas_Importantes {
 
 model T_Archivos_Respaldo_Google_Drive {
   Id_Archivo_Respaldo Int      @id @default(autoincrement())
-  Nombre_Archivo      String   @db.VarChar(255)
+  Nombre_Archivo      String   @unique @db.VarChar(255)
   Google_Drive_Id     String   @unique
   Descripcion         String?  @db.Text
   Ultima_Modificacion DateTime @default(now())
+}
+
+model T_Vacaciones_Interescolares {
+  Id_Vacacion_Interescolar  Int      @id @default(autoincrement())
+  Fecha_Inicio              DateTime @db.Date
+  Fecha_Conclusion          DateTime @db.Date
+
+  @@map("T_Vacaciones_Interescolares")
 }

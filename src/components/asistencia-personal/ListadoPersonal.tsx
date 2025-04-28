@@ -145,6 +145,7 @@ export const ListaPersonal = ({
         ).shift()} ${personal.Apellidos.split(" ").shift()}`
       );
 
+      console.log("JJJJJJJJJJJJ", horaEsperada);
       const fecthCancelable = await fetchSiasisAPI({
         endpoint: "/api/asistencia-diaria/marcar",
         method: "POST",
@@ -152,7 +153,7 @@ export const ListaPersonal = ({
           DNI: personal.DNI,
           Actor: rol,
           ModoRegistro: modoRegistro,
-          FechaHoraEsperadaISO: horaEsperada.toISOString(),
+          FechaHoraEsperadaISO: new Date(horaEsperada).toISOString(),
         } as RegistrarAsistenciaIndividualRequestBody),
       });
 
@@ -171,7 +172,6 @@ export const ListaPersonal = ({
           Dia: fechaHoraActual.utilidades!.diaMes,
           DNI: personal.DNI,
           esNuevoRegistro: data.data.esNuevoRegistro,
-          Id_Registro_Mensual: data.data.Id_Registro_Mensual,
           ModoRegistro: modoRegistro,
           Detalles: {
             DesfaseSegundos: data.data.desfaseSegundos,

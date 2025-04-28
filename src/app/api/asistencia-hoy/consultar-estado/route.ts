@@ -5,7 +5,7 @@ import { LogoutTypes, ErrorDetailsForLogout } from "@/interfaces/LogoutTypes";
 import { verifyAuthToken } from "@/lib/utils/backend/auth/functions/jwtComprobations";
 import { redirectToLogin } from "@/lib/utils/backend/auth/functions/redirectToLogin";
 import { redisClient } from "../../../../../config/Redis/RedisClient";
-import { obtenerFechaActualPeru } from "../../_functions/obtenerFechaActualPeru";
+import { obtenerFechaActualPeru } from "../../_helpers/obtenerFechaActualPeru";
 import {
   EstadoTomaAsistenciaResponseBody,
   TipoAsistencia,
@@ -67,20 +67,17 @@ export async function GET(req: NextRequest) {
 
     // Determinar la key correcta en Redis según el TipoAsistencia
     let redisKey;
-    let tipoAsistencia;
+    const tipoAsistencia = tipoAsistenciaParam;
 
-    switch (tipoAsistenciaParam) {
+    switch (tipoAsistencia) {
       case TipoAsistencia.ParaPersonal:
         redisKey = NOMBRE_BANDERA_INICIO_TOMA_ASISTENCIA_PERSONAL;
-        tipoAsistencia = TipoAsistencia.ParaPersonal;
         break;
       case TipoAsistencia.ParaEstudiantesPrimaria:
         redisKey = NOMBRE_BANDERA_INICIO_TOMA_ASISTENCIA_PRIMARIA;
-        tipoAsistencia = TipoAsistencia.ParaEstudiantesPrimaria;
         break;
       case TipoAsistencia.ParaEstudiantesSecundaria:
         redisKey = NOMBRE_BANDERA_INICIO_TOMA_ASISTENCIA_SECUNDARIA;
-        tipoAsistencia = TipoAsistencia.ParaEstudiantesSecundaria;
         break;
       default:
         return NextResponse.json(
@@ -89,12 +86,16 @@ export async function GET(req: NextRequest) {
         );
     }
 
+    // Obtener la instancia de Redis correspondiente al tipo de asistencia
+    const redisClientInstance = redisClient(tipoAsistencia);
+
     // Consultar el valor en Redis
-    const valor = await redisClient.get(redisKey);
+    const valor = await redisClientInstance.get(redisKey);
 
     // Determinar si la asistencia está iniciada - Si no hay valor, simplemente consideramos que no está iniciada
     const asistenciaIniciada = valor === true;
     console.log("prueba", valor);
+
     // Construir la respuesta - siempre devolvemos una respuesta válida con el estado actual
     const respuesta: EstadoTomaAsistenciaResponseBody = {
       TipoAsistencia: tipoAsistencia,

@@ -72,3 +72,29 @@ jobs:
 
           cd ..
         continue-on-error: true
+
+      # Repositorio 3
+      - name: Push to Repository 3
+        run: |
+          echo "Configurando repositorio de destino 3..."
+          mkdir -p temp-repo3
+          cd temp-repo3
+          git clone https://x-access-token:${{ secrets.SIU01_INS3_REPOSITORIO_PRODUCCION_TOKEN }}@github.com/IE20935-SIASIS-SIU01-INS3/IE20935-SIASIS-SIU03.git .
+          
+          echo "Copiando contenido actual sobre el repositorio destino 3..."
+          find .. -mindepth 1 -maxdepth 1 -not -path "../.git" -not -path "../temp-repo1" -not -path "../temp-repo3" -exec cp -r {} . \;
+          
+          echo "Verificando cambios en repositorio 3..."
+          git status
+          
+          echo "Añadiendo todos los cambios..."
+          git add -A
+          
+          echo "Creando commit con los cambios..."
+          git commit -m "Sync changes from ie20935 branch"
+          
+          echo "Haciendo push de los cambios al repositorio destino 3..."
+          git push origin master
+
+          cd ..
+        continue-on-error: true

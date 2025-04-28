@@ -4,12 +4,14 @@ import { ModoRegistro } from "@/interfaces/shared/ModoRegistroPersonal";
 import { redisClient } from "../../../../../config/Redis/RedisClient";
 import { verifyAuthToken } from "@/lib/utils/backend/auth/functions/jwtComprobations";
 import { RolesSistema } from "@/interfaces/shared/RolesSistema";
-import { obtenerFechaActualPeru } from "../../_functions/obtenerFechaActualPeru";
+import { obtenerFechaActualPeru } from "../../_helpers/obtenerFechaActualPeru";
 import {
   AsistenciaDiariaResultado,
   ConsultarAsistenciasDiariasPorActorEnRedisResponseBody,
+  TipoAsistencia,
 } from "@/interfaces/shared/AsistenciaRequests";
 import { Meses } from "@/interfaces/shared/Meses";
+import { determinarTipoAsistencia } from "../_helpers/determinarTipoAsistencia";
 
 export interface DetallesAsistenciaUnitariaPersonal {
   Timestamp: number;
@@ -70,8 +72,15 @@ export async function GET(req: NextRequest) {
     // Patrón para buscar claves en Redis
     const patronBusqueda = `${fechaActualPeru}:${modoRegistroParam}:${actorParam}:*`;
 
+    // Determinar el tipo de asistencia basado en el actor
+    const actor = actorParam as ActoresSistema;
+    const tipoAsistencia = determinarTipoAsistencia(actor);
+
+    // Obtener la instancia de Redis correspondiente
+    const redisClientInstance = redisClient(tipoAsistencia);
+
     // Buscar todas las claves que coincidan con el patrón
-    const claves = await redisClient.keys(patronBusqueda);
+    const claves = await redisClientInstance.keys(patronBusqueda);
 
     // Crear la lista de resultados
     const resultados: AsistenciaDiariaResultado[] = [];
@@ -79,7 +88,7 @@ export async function GET(req: NextRequest) {
     // Procesar cada clave encontrada
     for (const clave of claves) {
       // Obtener el valor almacenado en Redis para esta clave
-      const valor = await redisClient.get(clave);
+      const valor = await redisClientInstance.get(clave);
 
       if (valor && Array.isArray(valor) && valor.length >= 3) {
         const partes = clave.split(":");
@@ -98,6 +107,37 @@ export async function GET(req: NextRequest) {
               DesfaseSegundos: desfaseSegundos,
             },
           });
+        }
+      }
+    }
+
+    // Si es un estudiante y no encontramos resultados en secundaria, probamos en primaria
+    if (actor === ActoresSistema.Estudiante && resultados.length === 0) {
+      // Probar con la instancia de Redis para primaria
+      const redisClientPrimaria = redisClient(
+        TipoAsistencia.ParaEstudiantesPrimaria
+      );
+      const clavesEnPrimaria = await redisClientPrimaria.keys(patronBusqueda);
+
+      for (const clave of clavesEnPrimaria) {
+        const valor = await redisClientPrimaria.get(clave);
+
+        if (valor && Array.isArray(valor) && valor.length >= 3) {
+          const partes = clave.split(":");
+          if (partes.length >= 4) {
+            const dni = partes[3];
+            const timestamp = parseInt(valor[1] as string);
+            const desfaseSegundos = parseInt(valor[2] as string);
+
+            resultados.push({
+              DNI: dni,
+              AsistenciaMarcada: true,
+              Detalles: {
+                Timestamp: timestamp,
+                DesfaseSegundos: desfaseSegundos,
+              },
+            });
+          }
         }
       }
     }
