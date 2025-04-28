@@ -161,6 +161,7 @@ export async function GET(req: NextRequest) {
   }
 }
 
+
 // Función para filtrar los datos según el rol
 function filtrarDatosSegunRol(
   datos: DatosAsistenciaHoyIE20935,
@@ -173,7 +174,8 @@ function filtrarDatosSegunRol(
     FechaUTC: datos.FechaUTC,
     FechaLocalPeru: datos.FechaLocalPeru,
     FueraAñoEscolar: datos.FueraAñoEscolar,
-    DentroVacionesMedioAño: datos.DentroVacionesMedioAño,
+    Semana_De_Gestion: datos.Semana_De_Gestion,
+    Vacaciones_Interescolares: datos.Vacaciones_Interescolares,
     ComunicadosParaMostrarHoy: datos.ComunicadosParaMostrarHoy,
   };
 
