@@ -1,0 +1,152 @@
+name: Sync to Production Repositories
+
+on:
+  push:
+    branches:
+      - ie20935
+
+  workflow_dispatch:
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
+          ref: ie20935
+          
+      - name: Configure Git
+        run: |
+          git config --global user.name "SIASIS IE20935 Sync Bot"
+          git config --global user.email "siasis-sync@asuncion8.edu.pe"
+      
+      # Repositorio 1
+      - name: Push to Repository 1
+        run: |
+          echo "Configurando repositorio de destino 1..."
+          mkdir -p temp-repo1
+          cd temp-repo1
+          git clone https://x-access-token:${{ secrets.SIU01_INS1_REPOSITORIO_PRODUCCION_TOKEN }}@github.com/SIU01-ASUNCION8-SIASIS/SIU01-INS1-IE20935.git .
+          
+          echo "Copiando contenido actual sobre el repositorio destino 1..."
+          find .. -mindepth 1 -maxdepth 1 -not -path "../.git" -not -path "../temp-repo1" -not -path "../temp-repo2" -exec cp -r {} . \;
+          
+          echo "Verificando cambios en repositorio 1..."
+          git status
+          
+          echo "Añadiendo todos los cambios..."
+          git add -A
+          
+          echo "Creando commit con los cambios..."
+          git commit -m "Sync changes from ie20935 branch"
+          
+          echo "Haciendo push de los cambios al repositorio destino 1..."
+          git push origin master
+          
+          cd ..
+        continue-on-error: true
+
+      # Repositorio 2
+      - name: Push to Repository 2
+        run: |
+          echo "Configurando repositorio de destino 2..."
+          mkdir -p temp-repo2
+          cd temp-repo2
+          git clone https://x-access-token:${{ secrets.SIU01_INS2_REPOSITORIO_PRODUCCION_TOKEN }}@github.com/SIU01-INS2/SIU01-INS2-IE20935.git .
+          
+          echo "Copiando contenido actual sobre el repositorio destino 2..."
+          find .. -mindepth 1 -maxdepth 1 -not -path "../.git" -not -path "../temp-repo1" -not -path "../temp-repo2" -exec cp -r {} . \;
+          
+          echo "Verificando cambios en repositorio 2..."
+          git status
+          
+          echo "Añadiendo todos los cambios..."
+          git add -A
+          
+          echo "Creando commit con los cambios..."
+          git commit -m "Sync changes from ie20935 branch"
+          
+          echo "Haciendo push de los cambios al repositorio destino 2..."
+          git push origin master
+
+          cd ..
+        continue-on-error: true
+
+      # Repositorio 3
+      - name: Push to Repository 3
+        run: |
+          echo "Configurando repositorio de destino 3..."
+          mkdir -p temp-repo3
+          cd temp-repo3
+          git clone https://x-access-token:${{ secrets.SIU01_INS3_REPOSITORIO_PRODUCCION_TOKEN }}@github.com/IE20935-SIASIS-SIU01-INS3/IE20935-SIASIS-SIU03.git .
+          
+          echo "Copiando contenido actual sobre el repositorio destino 3..."
+          find .. -mindepth 1 -maxdepth 1 -not -path "../.git" -not -path "../temp-repo1" -not -path "../temp-repo3" -exec cp -r {} . \;
+          
+          echo "Verificando cambios en repositorio 3..."
+          git status
+          
+          echo "Añadiendo todos los cambios..."
+          git add -A
+          
+          echo "Creando commit con los cambios..."
+          git commit -m "Sync changes from ie20935 branch"
+          
+          echo "Haciendo push de los cambios al repositorio destino 3..."
+          git push origin master
+
+          cd ..
+        continue-on-error: true
+
+      # Repositorio 4
+      - name: Push to Repository 4
+        run: |
+          echo "Configurando repositorio de destino 4..."
+          mkdir -p temp-repo4
+          cd temp-repo4
+          git clone https://x-access-token:${{ secrets.SIU01_INS4_REPOSITORIO_PRODUCCION_TOKEN }}@github.com/IE20935-SIASIS-SIU01-INS4/SIASIS-SIU01-INS4.git .
+          
+          echo "Copiando contenido actual sobre el repositorio destino 4..."
+          find .. -mindepth 1 -maxdepth 1 -not -path "../.git" -not -path "../temp-repo1" -not -path "../temp-repo4" -exec cp -r {} . \;
+          
+          echo "Verificando cambios en repositorio 4..."
+          git status
+          
+          echo "Añadiendo todos los cambios..."
+          git add -A
+          
+          echo "Creando commit con los cambios..."
+          git commit -m "Sync changes from ie20935 branch"
+          
+          echo "Haciendo push de los cambios al repositorio destino 4..."
+          git push origin master
+
+          cd ..
+        continue-on-error: true
+
+      # Repositorio 5
+      - name: Push to Repository 5
+        run: |
+          echo "Configurando repositorio de destino 5..."
+          mkdir -p temp-repo5
+          cd temp-repo5
+          git clone https://x-access-token:${{ secrets.SIU01_INS5_REPOSITORIO_PRODUCCION_TOKEN }}@github.com/IE20935-SIASIS-SIU01-INS5/SIASIS-SIU01-INS5.git .
+          
+          echo "Copiando contenido actual sobre el repositorio destino 5..."
+          find .. -mindepth 1 -maxdepth 1 -not -path "../.git" -not -path "../temp-repo1" -not -path "../temp-repo5" -exec cp -r {} . \;
+          
+          echo "Verificando cambios en repositorio 5..."
+          git status
+          
+          echo "Añadiendo todos los cambios..."
+          git add -A
+          
+          echo "Creando commit con los cambios..."
+          git commit -m "Sync changes from ie20935 branch"
+          
+          echo "Haciendo push de los cambios al repositorio destino 5..."
+          git push origin master
+
+          cd ..
+        continue-on-error: true
