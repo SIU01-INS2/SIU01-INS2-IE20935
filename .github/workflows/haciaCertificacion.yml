@@ -1,0 +1,116 @@
+name: Sync to Certification Repositories
+
+on:
+  repository_dispatch:
+    types: [hacia-certificacion]
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
+          ref: master
+
+      - name: Configure Git
+        run: |
+          git config --global user.name "SIASIS Desarrollo Sync Bot"
+          git config --global user.email "siasis-sync-from-desarrollo@asuncion8.edu.pe"
+
+      # Repositorio 1
+      - name: Push to Repository 1
+        run: |
+          echo "Configurando repositorio de destino 1..."
+          mkdir -p temp-repo1
+          cd temp-repo1
+          git clone https://x-access-token:${{ secrets.SIASIS_SIU01_INS1_REPOSITORIO_CERTIFICACION_PAT }}@github.com/SIASIS-SIU01-CERT-INS1/SIU01.git .
+
+          echo "Limpiando repositorio destino 1 (excepto .git)..."
+          find . -mindepth 1 -maxdepth 1 -not -path "./.git" -exec rm -rf {} \;
+
+          echo "Copiando contenido actual sobre el repositorio destino 1..."
+          find .. -mindepth 1 -maxdepth 1 -not -path "../.git" -not -path "../temp-repo1" -not -path "../temp-repo2" -not -path "../temp-repo3" -exec cp -r {} . \;
+
+          echo "Verificando cambios en repositorio 1..."
+          git status
+
+          echo "Añadiendo todos los cambios..."
+          git add -A
+
+          echo "Creando commit con los cambios..."
+          if git diff --staged --quiet; then
+            echo "No hay cambios para sincronizar en repositorio 1"
+          else
+            git commit -m "Sync changes from master branch (includes deleted files)"
+            echo "Haciendo push de los cambios al repositorio destino 1..."
+            git push origin master
+          fi
+
+          cd ..
+        continue-on-error: true
+
+      # Repositorio 2
+      - name: Push to Repository 2
+        run: |
+          echo "Configurando repositorio de destino 2..."
+          mkdir -p temp-repo2
+          cd temp-repo2
+          git clone https://x-access-token:${{ secrets.SIASIS_SIU01_INS23_REPOSITORIO_CERTIFICACION_PAT }}@github.com/SIASIS-SIU01-CERT-INS23/SIU01.git .
+
+          echo "Limpiando repositorio destino 2 (excepto .git)..."
+          find . -mindepth 1 -maxdepth 1 -not -path "./.git" -exec rm -rf {} \;
+
+          echo "Copiando contenido actual sobre el repositorio destino 2..."
+          find .. -mindepth 1 -maxdepth 1 -not -path "../.git" -not -path "../temp-repo1" -not -path "../temp-repo2" -not -path "../temp-repo3" -exec cp -r {} . \;
+
+          echo "Verificando cambios en repositorio 2..."
+          git status
+
+          echo "Añadiendo todos los cambios..."
+          git add -A
+
+          echo "Creando commit con los cambios..."
+          if git diff --staged --quiet; then
+            echo "No hay cambios para sincronizar en repositorio 2"
+          else
+            git commit -m "Sync changes from master branch (includes deleted files)"
+            echo "Haciendo push de los cambios al repositorio destino 2..."
+            git push origin master
+          fi
+
+          cd ..
+        continue-on-error: true
+
+      # Repositorio 3
+      - name: Push to Repository 3
+        run: |
+          echo "Configurando repositorio de destino 3..."
+          mkdir -p temp-repo3
+          cd temp-repo3
+          git clone https://x-access-token:${{ secrets.SIASIS_SIU01_INS45_REPOSITORIO_CERTIFICACION_PAT }}@github.com/SIASIS-SIU01-CERT-INS45/SIU01.git .
+
+          echo "Limpiando repositorio destino 3 (excepto .git)..."
+          find . -mindepth 1 -maxdepth 1 -not -path "./.git" -exec rm -rf {} \;
+
+          echo "Copiando contenido actual sobre el repositorio destino 3..."
+          find .. -mindepth 1 -maxdepth 1 -not -path "../.git" -not -path "../temp-repo1" -not -path "../temp-repo2" -not -path "../temp-repo3" -exec cp -r {} . \;
+
+          echo "Verificando cambios en repositorio 3..."
+          git status
+
+          echo "Añadiendo todos los cambios..."
+          git add -A
+
+          echo "Creando commit con los cambios..."
+          if git diff --staged --quiet; then
+            echo "No hay cambios para sincronizar en repositorio 3"
+          else
+            git commit -m "Sync changes from master branch (includes deleted files)"
+            echo "Haciendo push de los cambios al repositorio destino 3..."
+            git push origin master
+          fi
+
+          cd ..
+        continue-on-error: true

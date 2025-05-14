@@ -30,7 +30,9 @@ export class FetchCancelable {
   }
 
   fetch(): Promise<Response> {
-    return fetch(this.url, { ...this.options, signal: this.signal });
+    return fetch(this.url, { ...this.options, signal: this.signal }).finally(()=>{
+      console.log("HOOK FUNCIONANDO") ;
+    }) ;
   }
 
   cancel(): void {

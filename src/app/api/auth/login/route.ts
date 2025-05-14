@@ -5,7 +5,6 @@ import { serialize } from "cookie";
 import { NextRequest } from "next/server";
 
 export async function POST(req: NextRequest) {
-  console.log("INICIO DE SESION TIMESTAMP ", new Date().getTime());
   try {
     const bodyString = await readStreamToString(req.body!);
 

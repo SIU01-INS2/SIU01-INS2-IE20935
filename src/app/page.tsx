@@ -49,6 +49,7 @@ const Home = async () => {
         <div className="flex flex-col max-w-[60%] max-sm:max-w-full text-left max-sm:text-left">
           <p className="text-[2rem] font-extrabold text-color-interfaz max-sm:text-[1.6rem]">
             S I A S I S
+            
           </p>
           <p className="text-[1rem] text-negro max-sm:text-[1.1rem] mt-2">
             ¡Nos emociona presentar esta nueva y avanzada sistema de asistencia!

@@ -119,11 +119,10 @@ const PlantillaLogin = ({ rol, siasisAPI, endpoint }: PlantillaLoginProps) => {
       //Sincronizando las modificaciones de tablas
       await new UltimaModificacionTablasIDB(siasisAPI).sync(true);
 
-      
       // setTimeout(() => {
-        window.location.href = "/";
-        // }, 10000);
-        setIsSomethingLoading(false);
+      window.location.href = "/";
+      // }, 10000);
+      setIsSomethingLoading(false);
 
       // eslint-disable-next-line @typescript-eslint/no-unused-vars
     } catch (e) {
@@ -212,6 +211,8 @@ const PlantillaLogin = ({ rol, siasisAPI, endpoint }: PlantillaLoginProps) => {
                   <Loader className="w-[1.5rem] bg-white p-[0.3rem]" />
                 )}
               </button>
+
+            
             </form>
           </div>
 
