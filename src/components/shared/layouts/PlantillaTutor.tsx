@@ -2,6 +2,7 @@ import { RequestCookie } from "next/dist/compiled/@edge-runtime/cookies";
 import React from "react";
 import Header from "./Header";
 import { RolesSistema } from "@/interfaces/shared/RolesSistema";
+import NavBarFooter from "./NavBarFooter";
 
 const PlantillaTutor = ({
   children,
@@ -26,6 +27,8 @@ const PlantillaTutor = ({
         Rol={RolesSistema.Tutor}
       />
       {children}
+
+      <NavBarFooter Rol={RolesSistema.Tutor}/>
     </>
   );
 };

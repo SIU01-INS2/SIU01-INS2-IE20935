@@ -2,6 +2,7 @@ import { RequestCookie } from "next/dist/compiled/@edge-runtime/cookies";
 import React from "react";
 import Header from "./Header";
 import { RolesSistema } from "../../../interfaces/shared/RolesSistema";
+import NavBarFooter from "./NavBarFooter";
 
 const PlantillaProfesorSecundaria = ({
   children,
@@ -26,6 +27,7 @@ const PlantillaProfesorSecundaria = ({
         Google_Drive_Foto_ID={Google_Drive_Foto_ID}
       />
       {children}
+      <NavBarFooter Rol={RolesSistema.ProfesorSecundaria} />
     </>
   );
 };
