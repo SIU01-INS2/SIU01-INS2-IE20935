@@ -16,7 +16,6 @@ import {
 import { AsistenciaDePersonalIDB } from "../../lib/utils/local/db/models/AsistenciaDePersonal/AsistenciaDePersonalIDB";
 import { FechaHoraActualRealState } from "@/global/state/others/fechaHoraActualReal";
 import { RolesSistema } from "@/interfaces/shared/RolesSistema";
-import useSiasisAPIs from "@/hooks/useSiasisAPIs";
 import { ActoresSistema } from "@/interfaces/shared/ActoresSistema";
 import { Loader2 } from "lucide-react";
 import { ConsultarAsistenciasDiariasPorActorEnRedisResponseBody } from "@/interfaces/shared/AsistenciaRequests";
@@ -53,8 +52,6 @@ export const ListaPersonal = ({
   const [procesando, setProcesando] = useState<string | null>(null); // Guarda el DNI que se está procesando
   const [asistenciasMarcadas, setAsistenciasMarcadas] = useState<string[]>([]);
   const [cargandoAsistencias, setCargandoAsistencias] = useState(true);
-
-  const { fetchSiasisAPI } = useSiasisAPIs("API01", RolesSistema.Directivo);
 
   // Obtenemos los datos del personal
   const personal = rol
@@ -146,8 +143,7 @@ export const ListaPersonal = ({
       );
 
       console.log("JJJJJJJJJJJJ", horaEsperada);
-      const fecthCancelable = await fetchSiasisAPI({
-        endpoint: "/api/asistencia-diaria/marcar",
+      const response = await fetch("/api/asistencia-hoy/marcar", {
         method: "POST",
         body: JSON.stringify({
           DNI: personal.DNI,
@@ -156,9 +152,6 @@ export const ListaPersonal = ({
           FechaHoraEsperadaISO: new Date(horaEsperada).toISOString(),
         } as RegistrarAsistenciaIndividualRequestBody),
       });
-
-      // Realizar la petición para registrar la asistencia
-      const response = await fecthCancelable!.fetch();
 
       const data =
         (await response.json()) as RegistrarAsistenciaIndividualSuccessResponse;

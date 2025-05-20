@@ -89,7 +89,7 @@ jobs:
           echo "Configurando repositorio de destino 3..."
           mkdir -p temp-repo3
           cd temp-repo3
-          git clone https://x-access-token:${{ secrets.SIASIS_SIU01_INS3_REPOSITORIO_PRODUCCION_IE20935_PAT }}@github.com/SIASIS-SIU01-PROD-IE20935-INS3/SIU01 .
+          git clone https://x-access-token:${{ secrets.SIASIS_SIU01_INS3_REPOSITORIO_PRODUCCION_IE20935_PAT }}@github.com/SIASIS-SIU01-PROD-IE20935-INS3/SIU01.git .
 
           echo "Limpiando repositorio destino 3 (excepto .git)..."
           find . -mindepth 1 -maxdepth 1 -not -path "./.git" -exec rm -rf {} \;

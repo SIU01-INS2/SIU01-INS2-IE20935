@@ -8,6 +8,9 @@ export const TUTOR_SESSION_EXPIRATION_seg = 60 * 60 * 5; // 5 horas
 export const RESPONSABLE_SESSION_EXPIRATION_seg = 60 * 60 * 5; // 5 horas
 export const PERSONAL_ADMINISTRATIVO_SESSION_EXPIRATION_seg = 60 * 60 * 5; // 5 horas
 
+export const HORA_MAXIMA_EXPIRACION_PARA_REGISTROS_EN_REDIS = 21;
+
+
 export function getExpirationSessionForRolInSeg(rol: RolesSistema) {
   switch (rol) {
     case RolesSistema.Directivo:
