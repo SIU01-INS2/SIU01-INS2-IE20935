@@ -8,6 +8,7 @@ import { ValidationResult } from "./types";
  * @returns Resultado de la validación
  */
 export function validateCurrentPassword(
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   value: any,
   required: boolean
 ): ValidationResult {
@@ -50,6 +51,7 @@ export function validateCurrentPassword(
  * @returns Resultado de la validación
  */
 export function validatePassword(
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   value: any,
   required: boolean
 ): ValidationResult {

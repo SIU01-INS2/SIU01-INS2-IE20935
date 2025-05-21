@@ -18,7 +18,7 @@ import { TipoAsistencia } from "@/interfaces/shared/AsistenciaRequests";
 import { HORA_MAXIMA_EXPIRACION_PARA_REGISTROS_EN_REDIS } from "@/constants/expirations";
 
 // Función para determinar el tipo de asistencia según el actor y nivel educativo
-export const determinarTipoAsistencia = (
+const determinarTipoAsistencia = (
   actor: ActoresSistema | RolesSistema,
   nivelDelEstudiante?: NivelEducativo
 ): TipoAsistencia => {

@@ -7,6 +7,7 @@ import { ValidationResult } from "./types";
  * @param required - Indica si el campo es obligatorio
  * @returns Resultado de la validación
  */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 export function validatePhone(value: any, required: boolean): ValidationResult {
   if ((value === undefined || value === null) && required) {
     return {

@@ -14,5 +14,6 @@ export type ValidationResult = {
  */
 export type ValidatorConfig = {
   field: string;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   validator: (value: any, required: boolean) => ValidationResult;
 };

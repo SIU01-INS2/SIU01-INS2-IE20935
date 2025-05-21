@@ -8,6 +8,7 @@ import { ValidationResult, ValidatorConfig } from "./types";
  * @returns Resultado de la validación
  */
 export function validateData(
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   data: Record<string, any>,
   validators: ValidatorConfig[]
 ): ValidationResult {
