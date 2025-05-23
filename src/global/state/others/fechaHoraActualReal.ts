@@ -12,15 +12,17 @@ import {
   mesesTextos,
   mesesTextosCortos,
 } from "@/interfaces/shared/Meses";
+import { ENTORNO } from "@/constants/ENTORNO";
+import { Entorno } from "@/interfaces/shared/Entornos";
 
 // Constante para el offset de tiempo (para pruebas)
 // Modificar estos valores para cambiar el offset aplicado a la hora del servidor
 export const TIME_OFFSET = {
-  days: -1,
+  days: 0,
   minutes: 0,
-  hours: -8, // Agregar propiedad 'hours' con un valor predeterminado
+  hours: 0, // Agregar propiedad 'hours' con un valor predeterminado
   seconds: 0,
-  enabled: process.env.NODE_ENV === "development", // Habilitar/deshabilitar el offset
+  enabled: ENTORNO === Entorno.LOCAL, // Habilitar/deshabilitar el offset
 };
 
 // Interfaces para datos de tiempo formateados y utilidades

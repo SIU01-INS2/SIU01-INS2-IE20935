@@ -2,6 +2,7 @@ import { ModoRegistro } from "./ModoRegistroPersonal";
 import { RolesSistema } from "./RolesSistema";
 import { Meses } from "./Meses";
 import { ActoresSistema } from "./ActoresSistema";
+import { EstadosAsistencia } from "./EstadosAsistenciaEstudiantes";
 
 export interface RegistroAsistenciaUnitariaPersonal {
   ModoRegistro: ModoRegistro;
@@ -25,10 +26,17 @@ export interface DetallesAsistenciaUnitariaPersonal {
   DesfaseSegundos: number;
 }
 
+export interface DetallesAsistenciaUnitariaEstudiante {
+  Estado: EstadosAsistencia;
+}
+
 export interface AsistenciaDiariaResultado {
   DNI: string;
   AsistenciaMarcada: boolean;
-  Detalles: DetallesAsistenciaUnitariaPersonal | null;
+  Detalles:
+    | DetallesAsistenciaUnitariaPersonal
+    | DetallesAsistenciaUnitariaEstudiante
+    | null;
 }
 
 export interface ConsultarAsistenciasDiariasPorActorEnRedisResponseBody {

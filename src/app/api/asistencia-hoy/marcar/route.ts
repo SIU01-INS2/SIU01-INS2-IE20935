@@ -80,7 +80,6 @@ export async function POST(req: NextRequest) {
       DNI,
       FechaHoraEsperadaISO,
       ModoRegistro,
-      AulaDelEstudiante,
       NivelDelEstudiante,
     } = body;
 
@@ -129,13 +128,13 @@ export async function POST(req: NextRequest) {
     const esEstudiante = Actor === ActoresSistema.Estudiante;
 
     if (esEstudiante) {
-      // Validar que se proporcionaron nivel y aula para estudiantes
-      if (!NivelDelEstudiante || !AulaDelEstudiante) {
+      // Validar que se proporcionaron nivel para estudiantes
+      if (!NivelDelEstudiante) {
         return NextResponse.json(
           {
             success: false,
             message:
-              "Se requiere nivel educativo y aula para registrar asistencia de estudiantes",
+              "Se requiere nivel educativo para registrar asistencia de estudiantes",
             errorType: RequestErrorTypes.INVALID_PARAMETERS,
           },
           { status: 400 }
@@ -148,11 +147,9 @@ export async function POST(req: NextRequest) {
       (timestampActual - new Date(FechaHoraEsperadaISO).getTime()) / 1000
     );
 
-    // Crear clave para Redis
-    const ModoRegistroActor = `${ModoRegistro}:${Actor}`;
-    const clave = `${obtenerFechaActualPeru()}:${ModoRegistroActor}:${DNI}${
-      NivelDelEstudiante ? ":" + NivelDelEstudiante : ""
-    }${AulaDelEstudiante ? ":" + AulaDelEstudiante : ""}`;
+    // Crear clave para Redis con el formato correcto según el tipo de actor
+    const fechaHoy = obtenerFechaActualPeru();
+    const clave = `${fechaHoy}:${ModoRegistro}:${Actor}:${DNI}`;
 
     // Determinar el tipo de asistencia y obtener el cliente Redis correcto
     const tipoAsistencia = determinarTipoAsistencia(Actor, NivelDelEstudiante);
@@ -163,25 +160,25 @@ export async function POST(req: NextRequest) {
     const esNuevoRegistro = !registroExistente;
 
     if (esNuevoRegistro) {
-      // Crear valor para Redis
-      let estado;
+      // Crear valor para Redis según el tipo de actor
       if (esEstudiante) {
-        estado =
+        // Para estudiantes: Valor es simplemente "A" o "T"
+        const estado =
           desfaseSegundos > MINUTOS_TOLERANCIA * 60
             ? EstadosAsistencia.Tarde
             : EstadosAsistencia.Temprano;
+
+        // Establecer la expiración
+        const segundosHastaExpiracion = calcularSegundosHastaExpiracion();
+        await redisClientInstance.set(clave, estado, segundosHastaExpiracion);
+      } else {
+        // Para personal: Valor es array [timestamp, desfaseSegundos]
+        const valor = [timestampActual.toString(), desfaseSegundos.toString()];
+
+        // Establecer la expiración
+        const segundosHastaExpiracion = calcularSegundosHastaExpiracion();
+        await redisClientInstance.set(clave, valor, segundosHastaExpiracion);
       }
-
-      const valor = [
-        ModoRegistroActor,
-        timestampActual.toString(),
-        desfaseSegundos.toString(),
-        esEstudiante ? estado : "",
-      ];
-
-      // Establecer la expiración
-      const segundosHastaExpiracion = calcularSegundosHastaExpiracion();
-      await redisClientInstance.set(clave, valor, segundosHastaExpiracion);
     }
 
     return NextResponse.json(
@@ -194,6 +191,11 @@ export async function POST(req: NextRequest) {
           timestamp: timestampActual,
           desfaseSegundos,
           esNuevoRegistro,
+          estado: esEstudiante
+            ? desfaseSegundos > MINUTOS_TOLERANCIA * 60
+              ? EstadosAsistencia.Tarde
+              : EstadosAsistencia.Temprano
+            : null,
         },
       } as RegistrarAsistenciaIndividualSuccessResponse,
       { status: 200 }

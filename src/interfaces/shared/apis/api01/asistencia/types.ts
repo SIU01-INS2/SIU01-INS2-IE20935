@@ -10,7 +10,7 @@ export interface RegistrarAsistenciaIndividualRequestBody {
   ModoRegistro: ModoRegistro;
   FechaHoraEsperadaISO: string;
   NivelDelEstudiante?: NivelEducativo;
-  AulaDelEstudiante?: string;
+  // AulaDelEstudiante?: string;
 }
 
 export interface RegistrarAsistenciaIndividualSuccessResponse

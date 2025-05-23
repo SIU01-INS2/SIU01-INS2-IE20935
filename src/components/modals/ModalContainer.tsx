@@ -21,7 +21,7 @@ const ModalContainer = ({
         onClick={(e) => {
           e.stopPropagation();
         }}
-        className={`bg-white relative p-6 rounded-xl modal-content animate__animated animate__pulse [animation-duration:300ms] max-w-[90vw] max-h-[90vh] ${
+        className={`bg-white relative p-6 rounded-xl modal-content animate__animated animate__zoomIn [animation-duration:200ms] max-w-[90vw] max-h-[90vh] ${
           className ?? ""
         }`}
         style={{

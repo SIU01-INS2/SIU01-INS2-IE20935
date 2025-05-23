@@ -9,6 +9,8 @@ import PlantillaSegunRol from "@/components/shared/layouts/PlantillaSegunRol";
 import NextTopLoader from "nextjs-toploader";
 import { ColorHexadecimal } from "@/interfaces/Colors";
 import { getRandomContrastColor } from "@/lib/helpers/colors/getRandomContrastColor";
+import { ENTORNO } from "@/constants/ENTORNO";
+import { Entorno } from "@/interfaces/shared/Entornos";
 
 dotenv.config();
 
@@ -62,7 +64,7 @@ export default async function RootLayout({
             shadow={`0 0 10px ${contrastColor},0 0 5px ${contrastColor}`}
           />
 
-          <WindowDimensionsLabel />
+          {ENTORNO !== Entorno.PRODUCCION && <WindowDimensionsLabel />}
           <ProviderStore>
             <PlantillaSegunRol>{children}</PlantillaSegunRol>
           </ProviderStore>
