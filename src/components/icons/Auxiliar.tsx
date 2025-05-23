@@ -1,6 +1,6 @@
 import { IconProps } from "@/interfaces/IconProps";
 
-const Auxiliar = ({ className, title }: IconProps) => {
+const EstudianteBirrete = ({ className, title }: IconProps) => {
   return (
     <div title={title}>
       <svg
@@ -32,4 +32,4 @@ const Auxiliar = ({ className, title }: IconProps) => {
   );
 };
 
-export default Auxiliar;
+export default EstudianteBirrete;

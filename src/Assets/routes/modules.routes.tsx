@@ -16,6 +16,11 @@ import EventosIcon from "@/components/icons/EventosIcon";
 import ComunicadosIcon from "@/components/icons/ComunicadosIcon";
 import ConfiguracionesIcon from "@/components/icons/ConfiguracionesIcon";
 import PersonasGenericasIcon from "@/components/icons/PersonasGenericasIcon";
+import LibretaConLapiz from "@/components/icons/LibretaConLapiz";
+import PizarraAula from "@/components/icons/PizarraAula";
+import PersonaLibro from "@/components/icons/PersonaLibro";
+import EstudianteBirrete from "@/components/icons/Auxiliar";
+import RelojTIempo from "@/components/icons/RelojTIempo";
 
 export interface SiasisModule {
   etiquetaSuperior?: string;
@@ -141,6 +146,77 @@ const allSiasisModules: SiasisModule[] = [
       return <ConfiguracionesIcon {...props} />;
     },
     allowedRoles: [RolesSistema.Directivo],
+  },
+  {
+    route: "/tomar-asistencia-primaria",
+    text: "Tomar Asistencia",
+    IconTSX: (props: IconProps) => {
+      return <LibretaConLapiz {...props} />;
+    },
+    allowedRoles: [RolesSistema.ProfesorPrimaria],
+  },
+  {
+    route: "/mi-aula",
+    text: "Mi Aula",
+    IconTSX: (props: IconProps) => {
+      return <PizarraAula {...props} />;
+    },
+    allowedRoles: [RolesSistema.ProfesorPrimaria],
+  },
+  {
+    route: "/tomar-asistencia-secundaria",
+    text: "Tomar Asistencia",
+    IconTSX: (props: IconProps) => {
+      return <LibretaConLapiz {...props} />;
+    },
+    allowedRoles: [RolesSistema.Auxiliar],
+  },
+  {
+    route: "/asistencias-escolares-secundaria",
+    text: "Asistencias Escolares",
+    IconTSX: (props: IconProps) => {
+      return <EstudianteBirrete {...props} />;
+    },
+    allowedRoles: [RolesSistema.Auxiliar],
+  },
+  {
+    route: "/aula-a-cargo",
+    text: "Aula a Cargo",
+    IconTSX: (props: IconProps) => {
+      return <PizarraAula {...props} />;
+    },
+    allowedRoles: [RolesSistema.Tutor],
+  },
+  {
+    route: "/mi-horario",
+    text: "Mi Horario",
+    IconTSX: (props: IconProps) => {
+      return <RelojTIempo {...props} />;
+    },
+    allowedRoles: [RolesSistema.ProfesorSecundaria, RolesSistema.Tutor],
+  },
+
+  {
+    route: "/mis-asistencias",
+    text: "Mis Asistencias",
+    IconTSX: (props: IconProps) => {
+      return <PersonaLibro {...props} />;
+    },
+    allowedRoles: [
+      RolesSistema.ProfesorPrimaria,
+      RolesSistema.Auxiliar,
+      RolesSistema.ProfesorSecundaria,
+      RolesSistema.Tutor,
+      RolesSistema.PersonalAdministrativo,
+    ],
+  },
+  {
+    route: "/estudiantes-vinculados",
+    text: "Estudiantes Vinculados",
+    IconTSX: (props: IconProps) => {
+      return <EstudianteBirrete {...props} />;
+    },
+    allowedRoles: [RolesSistema.Responsable],
   },
 ];
 

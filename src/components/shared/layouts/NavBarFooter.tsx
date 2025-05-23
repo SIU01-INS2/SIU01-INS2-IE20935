@@ -1,222 +1,114 @@
-// components/shared/layouts/NavBarFooter.tsx
 "use client";
-import LibretaConLapiz from "@/components/icons/LibretaConLapiz";
-import PersonaLIbro from "@/components/icons/PersonaLibro";
-import PizarraAula from "@/components/icons/PizarraAula";
-import RelojTIempo from "@/components/icons/RelojTIempo";
-import Auxiliar from "@/components/icons/Auxiliar";
+
 import { RootState } from "@/global/store";
 import { RolesSistema } from "@/interfaces/shared/RolesSistema";
 import { useEffect, useState } from "react";
 import { useSelector } from "react-redux";
+import { usePathname } from "next/navigation";
 import InterceptedLinkForDataThatCouldBeLost from "../InterceptedLinkForDataThatCouldBeLost";
+import allSiasisModules from "@/Assets/routes/modules.routes";
 
-function getNavBarFooterByRol(Rol: RolesSistema): React.ReactNode {
-  switch (Rol) {
-    case RolesSistema.ProfesorPrimaria:
-      return (
-        <div
-          className={`
-            flex justify-center items-end
-            w-full
-            py-2 px-2
-            bg-white/95
-            rounded-t-2xl
-            border-t border-gray-200
-            shadow-[0_-12px_40px_0_rgba(0,0,0,0.22)]
-            transition-all
-            sxs-only:gap-2
-            xs-only:gap-4
-            sm-only:gap-8
-            md-only:gap-10
-            lg-only:gap-12
-            xl-only:gap-16
-            short-height:py-1
-          `}
-        >
-          <InterceptedLinkForDataThatCouldBeLost
-            href="/"
-            className="flex flex-col items-center"
-          >
-            <LibretaConLapiz className="w-12 h-12" />
-            <span className="mt-1 text-sm font-medium text-gray-700">
-              Tomar Asistencia
-            </span>
-          </InterceptedLinkForDataThatCouldBeLost>
-          <InterceptedLinkForDataThatCouldBeLost
-            href="/"
-            className="flex flex-col items-center"
-          >
-            <PizarraAula className="w-12 h-12" />
-            <span className="mt-1 text-sm font-medium text-gray-700">
-              Mi Aula
-            </span>
-          </InterceptedLinkForDataThatCouldBeLost>
-          <InterceptedLinkForDataThatCouldBeLost
-            href="/"
-            className="flex flex-col items-center"
-          >
-            <PersonaLIbro className="w-12 h-12" />
-            <span className="mt-1 text-sm font-medium text-gray-700">
-              Mis asistencia
-            </span>
-          </InterceptedLinkForDataThatCouldBeLost>
-        </div>
-      );
+// Estilos uniformes para todos los contenedores de navegación
+const getUniformContainerStyles = (itemsCount: number) => {
+  const gapClasses = {
+    1: "sxs-only:gap-8 xs-only:gap-12 sm-only:gap-16 md-only:gap-20 lg-only:gap-24 xl-only:gap-28",
+    2: "sxs-only:gap-6 xs-only:gap-8 sm-only:gap-12 md-only:gap-16 lg-only:gap-20 xl-only:gap-24",
+    3: "sxs-only:gap-4 xs-only:gap-6 sm-only:gap-8 md-only:gap-12 lg-only:gap-16 xl-only:gap-20",
+  };
 
-    case RolesSistema.Auxiliar:
-      return (
-        <div
-          className={`
-            hidden lg:flex
-            justify-center items-center
-            w-full
-            py-4 px-8
-            bg-white
-            shadow-[0_-6px_20px_0_rgba(0,0,0,0.12)]
+  return `
+    flex items-center
+    w-full
+    py-5 px-4
+    bg-white/95
+    border-t border-gray-200
+    transition-all duration-200
+    ${gapClasses[itemsCount as keyof typeof gapClasses] || gapClasses[3]}
+    short-height:py-4
+    overflow-x-auto
+    justify-center
+    min-w-fit
+    scrollbar-hide
+    sm:justify-center
+  `;
+};
 
-            border-t border-gray-200
-            gap-16
-          `}
-        >
-          <InterceptedLinkForDataThatCouldBeLost
-            href="/"
-            className="flex flex-col items-center group transition-all duration-200"
-          >
-            <LibretaConLapiz className="w-12 h-12 text-black group-hover:text-red-500 transition-colors duration-200" />
-            <span className="mt-2 text-sm font-medium text-black group-hover:text-red-500 transition-colors duration-200">
-              Tomar Asistencia
-            </span>
-          </InterceptedLinkForDataThatCouldBeLost>
-          
-          <InterceptedLinkForDataThatCouldBeLost
-            href="/"
-            className="flex flex-col items-center group transition-all duration-200"
-          >
-            <Auxiliar className="w-12 h-12 text-black group-hover:text-red-500 transition-colors duration-200" />
-            <span className="mt-2 text-sm font-medium text-black group-hover:text-red-500 transition-colors duration-200">
-              Asistencias Escolares
-            </span>
-          </InterceptedLinkForDataThatCouldBeLost>
-          
-          <InterceptedLinkForDataThatCouldBeLost
-            href="/"
-            className="flex flex-col items-center group transition-all duration-200"
-          >
-            <PersonaLIbro className="w-12 h-12 text-black group-hover:text-red-500 transition-colors duration-200" />
-            <span className="mt-2 text-sm font-medium text-black group-hover:text-red-500 transition-colors duration-200">
-              Mis Asistencias
-            </span>
-          </InterceptedLinkForDataThatCouldBeLost>
-        </div>
-      );
+// Estilos uniformes para los elementos de navegación
+const getUniformItemStyles = () => `
+  flex flex-col items-center
+  transition-all duration-200
+  hover:transform hover:scale-105
+  flex-shrink-0
+  min-w-fit
+`;
 
-    case RolesSistema.ProfesorSecundaria:
-      return (
-        <div
-          className={`
-            flex justify-center items-end
-            w-full
-            py-2 px-2
-            bg-white/95
-            rounded-t-2xl
-            border-t border-gray-200
-            shadow-[0_-12px_40px_0_rgba(0,0,0,0.22)]
-            transition-all
-            sxs-only:gap-4
-            xs-only:gap-6
-            sm-only:gap-10
-            md-only:gap-14
-            lg-only:gap-20
-            xl-only:gap-28
-            short-height:py-1
-          `}
-        >
-          <InterceptedLinkForDataThatCouldBeLost
-            href="/"
-            className="flex flex-col items-center"
-          >
-            <RelojTIempo className="w-12 h-12" />
-            <span className="mt-1 text-sm font-medium text-gray-700">
-              Registrar Hora
-            </span>
-          </InterceptedLinkForDataThatCouldBeLost>
-          <InterceptedLinkForDataThatCouldBeLost
-            href="/"
-            className="flex flex-col items-center"
-          >
-            <PersonaLIbro className="w-12 h-12" />
-            <span className="mt-1 text-sm font-medium text-gray-700">
-              Mis asistencia
-            </span>
-          </InterceptedLinkForDataThatCouldBeLost>
-        </div>
-      );
+// Estilos uniformes para los iconos
+const getUniformIconStyles = (isSelected: boolean = false) => `
+  sxs-only:w-5 sxs-only:h-5
+  xs-only:w-6 xs-only:h-6
+  sm-only:w-7 sm-only:h-7
+  md-only:w-8 md-only:h-8
+  lg-only:w-9 lg-only:h-9
+  xl-only:w-9 xl-only:h-9
+  ${isSelected ? "text-color-interfaz" : "text-black"}
+  transition-colors duration-200
+`;
 
-    case RolesSistema.Tutor:
-      return (
-        <div
-          className={`
-            flex justify-center items-end
-            w-full
-            py-2 px-2
-            bg-white/95
-            rounded-t-2xl
-            border-t border-gray-200
-            shadow-[0_-12px_40px_0_rgba(0,0,0,0.22)]
-            transition-all
-            sxs-only:gap-2
-            xs-only:gap-4
-            sm-only:gap-8
-            md-only:gap-10
-            lg-only:gap-12
-            xl-only:gap-16
-            short-height:py-1
-          `}
-        >
-          <InterceptedLinkForDataThatCouldBeLost
-            href="/"
-            className="flex flex-col items-center"
-          >
-            <PizarraAula className="w-12 h-12" />
-            <span className="mt-1 text-sm font-medium text-gray-700">
-              Aula Tutor
-            </span>
-          </InterceptedLinkForDataThatCouldBeLost>
-          <InterceptedLinkForDataThatCouldBeLost
-            href="/"
-            className="flex flex-col items-center"
-          >
-            <RelojTIempo className="w-12 h-12" />
-            <span className="mt-1 text-sm font-medium text-gray-700">
-              Registrar Hora
-            </span>
-          </InterceptedLinkForDataThatCouldBeLost>
-          <InterceptedLinkForDataThatCouldBeLost
-            href="/"
-            className="flex flex-col items-center"
-          >
-            <PersonaLIbro className="w-12 h-12" />
-            <span className="mt-1 text-sm font-medium text-gray-700">
-              Mis asistencia
-            </span>
-          </InterceptedLinkForDataThatCouldBeLost>
-        </div>
-      );
+// Estilos uniformes para las etiquetas de texto
+const getUniformLabelStyles = (isSelected: boolean = false) => `
+  mt-1
+  text-xs font-medium
+  sxs-only:text-xs
+  xs-only:text-xs
+  sm-only:text-sm
+  md-only:text-sm
+  lg-only:text-sm
+  xl-only:text-sm
+  ${isSelected ? "text-color-interfaz" : "text-black"}
+  transition-colors duration-200
+  text-center leading-tight
+  short-height:mt-0.5 short-height:text-xs
+  whitespace-nowrap
+`;
 
-    case RolesSistema.Responsable:
-      return <div>Responsable</div>;
+function getNavBarFooterByRol(
+  Rol: RolesSistema,
+  pathname: string
+): React.ReactNode {
+  // Filtrar módulos disponibles para el rol actual
+  const availableModules = allSiasisModules.filter((module) =>
+    module.allowedRoles.includes(Rol)
+  );
 
-    case RolesSistema.PersonalAdministrativo:
-      return <div>Personal Administrativo</div>;
-
-    default:
-      return <></>;
+  if (availableModules.length === 0) {
+    return <></>;
   }
+
+  return (
+    <div className={getUniformContainerStyles(availableModules.length)}>
+      {availableModules.map((module, index) => {
+        const isSelected = pathname.startsWith(module.route);
+
+        return (
+          <InterceptedLinkForDataThatCouldBeLost
+            key={index}
+            href={module.route}
+            className={getUniformItemStyles()}
+          >
+            <module.IconTSX className={getUniformIconStyles(isSelected)} />
+            <span className={getUniformLabelStyles(isSelected)}>
+              {module.text}
+            </span>
+          </InterceptedLinkForDataThatCouldBeLost>
+        );
+      })}
+    </div>
+  );
 }
 
 const NavBarFooter = ({ Rol }: { Rol: RolesSistema }) => {
   const [montado, setMontado] = useState(false);
+  const pathname = usePathname();
 
   useEffect(() => {
     setMontado(true);
@@ -232,13 +124,20 @@ const NavBarFooter = ({ Rol }: { Rol: RolesSistema }) => {
 
   return (
     <nav
-      className={`animate__animated ${
-        montado && navBarFooterIsOpen
-          ? "animate__slideInUp"
-          : "animate__slideOutDown"
-      } [animation-duration:150ms] flex items-center justify-center w-[100vw] fixed z-[1001] bottom-0 left-0`}
+      className={`shadow-[0_0_12px_4px_rgba(0,0,0,0.20)] 
+        animate__animated fixed
+        ${
+          montado && navBarFooterIsOpen
+            ? "animate__slideInUp sticky"
+            : "animate__slideOutDown"
+        } 
+        [animation-duration:150ms] 
+        flex items-center justify-center 
+        max-w-[100vw] w-full 
+         z-[1001] bottom-0 left-0
+      `}
     >
-      {getNavBarFooterByRol(Rol)}
+      {getNavBarFooterByRol(Rol, pathname)}
     </nav>
   );
 };
