@@ -10,6 +10,7 @@ import {
 import { RolesSistema } from "@/interfaces/shared/RolesSistema";
 import { Meses } from "@/interfaces/shared/Meses";
 import { ActoresSistema } from "@/interfaces/shared/ActoresSistema";
+import { DetallesAsistenciaUnitariaPersonal } from "../../../../../../interfaces/shared/AsistenciaRequests";
 
 export type EstadosAsistenciaDePersonal =
   | "Puntual"
@@ -1085,33 +1086,29 @@ export class AsistenciaDePersonalIDB {
         desfaseSegundos: Detalles!.DesfaseSegundos,
       };
 
+      // Si no tenemos ID, intentamos obtenerlo del almacén
+      const idRegistroMensual = await this.obtenerIdRegistroMensual(
+        tipoPersonal,
+        modoRegistro,
+        dni,
+        mes
+      );
 
-        // Si no tenemos ID, intentamos obtenerlo del almacén
-        const idRegistroMensual = await this.obtenerIdRegistroMensual(
+      if (idRegistroMensual) {
+        // Si encontramos un ID existente, lo usamos
+        await this.actualizarRegistroDiario(
           tipoPersonal,
           modoRegistro,
           dni,
-          mes
+          mes,
+          dia,
+          registro,
+          idRegistroMensual,
+          false // No es nuevo registro
         );
-
-        if (idRegistroMensual) {
-          // Si encontramos un ID existente, lo usamos
-          await this.actualizarRegistroDiario(
-            tipoPersonal,
-            modoRegistro,
-            dni,
-            mes,
-            dia,
-            registro,
-            idRegistroMensual,
-            false // No es nuevo registro
-          );
-        } else {
-          // Si no hay ID existente, que podemos hacer?
-
-
-        }
-      
+      } else {
+        // Si no hay ID existente, que podemos hacer?
+      }
 
       // Registrar en la consola
       console.log(
@@ -1712,8 +1709,12 @@ export class AsistenciaDePersonalIDB {
             Rol: datosRedis.Actor,
             Dia: diaActual,
             Detalles: resultado.Detalles && {
-              Timestamp: resultado.Detalles.Timestamp,
-              DesfaseSegundos: resultado.Detalles.DesfaseSegundos,
+              Timestamp: (
+                resultado as { Detalles: DetallesAsistenciaUnitariaPersonal }
+              ).Detalles.Timestamp,
+              DesfaseSegundos: (
+                resultado as { Detalles: DetallesAsistenciaUnitariaPersonal }
+              ).Detalles.DesfaseSegundos,
             },
             esNuevoRegistro: true,
           };
