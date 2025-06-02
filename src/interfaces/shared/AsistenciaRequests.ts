@@ -2,6 +2,7 @@ import { ModoRegistro } from "./ModoRegistroPersonal";
 import { RolesSistema } from "./RolesSistema";
 import { Meses } from "./Meses";
 import { ActoresSistema } from "./ActoresSistema";
+import { EstadosAsistenciaPersonal } from "./EstadosAsistenciaPersonal";
 import { EstadosAsistencia } from "./EstadosAsistenciaEstudiantes";
 
 export interface RegistroAsistenciaUnitariaPersonal {
@@ -9,8 +10,15 @@ export interface RegistroAsistenciaUnitariaPersonal {
   DNI: string;
   Rol: RolesSistema | ActoresSistema;
   Dia: number;
-  Detalles: DetallesAsistenciaUnitariaPersonal | null;
+  Detalles:
+    | DetallesAsistenciaUnitariaPersonal
+    | DetallesAsistenciaUnitariaEstudiantes
+    | null;
   esNuevoRegistro: boolean;
+}
+
+export interface DetallesAsistenciaUnitariaEstudiantes {
+  Estado: EstadosAsistencia;
 }
 
 export type RegistroAsistenciaMensualPersonal = Pick<
@@ -26,23 +34,19 @@ export interface DetallesAsistenciaUnitariaPersonal {
   DesfaseSegundos: number;
 }
 
-export interface DetallesAsistenciaUnitariaEstudiante {
-  Estado: EstadosAsistencia;
-}
-
 export interface AsistenciaDiariaResultado {
   DNI: string;
   AsistenciaMarcada: boolean;
   Detalles:
     | DetallesAsistenciaUnitariaPersonal
-    | DetallesAsistenciaUnitariaEstudiante
+    | DetallesAsistenciaUnitariaEstudiantes
     | null;
 }
 
-export interface ConsultarAsistenciasDiariasPorActorEnRedisResponseBody {
+export interface ConsultarAsistenciasTomadasPorActorEnRedisResponseBody {
   Actor: ActoresSistema;
   ModoRegistro: ModoRegistro;
-  Resultados: AsistenciaDiariaResultado[];
+  Resultados: AsistenciaDiariaResultado | AsistenciaDiariaResultado[];
   Mes: Meses;
   Dia: number;
 }
@@ -63,4 +67,50 @@ export interface EstadoTomaAsistenciaResponseBody {
 
 export interface IniciarTomaAsistenciaRequestBody {
   TipoAsistencia: TipoAsistencia;
+}
+
+// Interfaces para asistencia mensual
+export interface AsistenciaMensualPersonal {
+  Id_Registro_Mensual: number;
+  mes: Meses;
+  Dni_Personal: string;
+  registros: Record<string, RegistroEntradaSalida>;
+}
+
+// Interfaces para los registros de entrada/salida
+export interface RegistroEntradaSalida {
+  timestamp: number;
+  desfaseSegundos: number;
+  estado: EstadosAsistenciaPersonal;
+}
+
+export interface RegistroEntradaSalidaPersonal {
+  timestamp: number;
+  desfaseSegundos: number;
+  estado: EstadosAsistenciaPersonal;
+}
+
+// Interface para el request body
+export interface EliminarAsistenciaRequestBody {
+  DNI: string;
+  Actor: ActoresSistema;
+  ModoRegistro: ModoRegistro;
+  TipoAsistencia: TipoAsistencia;
+  // Para estudiantes (opcionales si no se especifican, se busca por patrón)
+  NivelEducativo?: string;
+  Grado?: number;
+  Seccion?: string;
+  // Fecha específica (opcional, por defecto usa fecha actual)
+  Fecha?: string; // Formato YYYY-MM-DD
+}
+
+// Interface para la respuesta exitosa
+export interface EliminarAsistenciaSuccessResponse {
+  success: true;
+  message: string;
+  data: {
+    asistenciaEliminada: boolean;
+    claveEliminada: string | null;
+    fecha: string;
+  };
 }

@@ -5,7 +5,7 @@ import VerEditarIcon from "@/components/icons/VerEditarIcon";
 import { Link } from "next-view-transitions";
 import { PersonalAdministrativoSinContraseña } from "@/interfaces/shared/apis/shared/others/types";
 import RelojIcon from "@/components/icons/RelojIcon";
-import formatearISOaFormato12Horas from "@/lib/helpers/formatters/formatearISOaFormato12Horas";
+import  { convertirAFormato12Horas } from "@/lib/helpers/formatters/fechas-hora/formatearAFormato12Horas";
 
 const PersonalAdministrativoCard = ({
   PersonalAdministrativo: {
@@ -55,11 +55,16 @@ const PersonalAdministrativoCard = ({
         <TelefonoIcon className="w-[1.1rem] sxs-only:w-[0.9rem] text-verde-principal" />
         <span title={Celular}>{Celular}</span>
       </div>
-      
+
       <div className="flex items-center justify-center gap-1 text-[15px] sxs-only:text-[13px] text-negro">
         <RelojIcon className="w-[1.1rem] sxs-only:w-[0.9rem] text-negro" />
-        <span title={`${formatearISOaFormato12Horas(String(Horario_Laboral_Entrada))} - ${formatearISOaFormato12Horas(String(Horario_Laboral_Salida))}`}>
-          {formatearISOaFormato12Horas(String(Horario_Laboral_Entrada))} - {formatearISOaFormato12Horas(String(Horario_Laboral_Salida))}
+        <span
+          title={`${convertirAFormato12Horas(
+            String(Horario_Laboral_Entrada)
+          )} - ${convertirAFormato12Horas(String(Horario_Laboral_Salida))}`}
+        >
+          {convertirAFormato12Horas(String(Horario_Laboral_Entrada))} -{" "}
+          {convertirAFormato12Horas(String(Horario_Laboral_Salida))}
         </span>
       </div>
 
@@ -79,7 +84,10 @@ const PersonalAdministrativoCard = ({
         Estado: {Estado ? "Activo" : "Inactivo"}
       </span>
 
-      <Link href={`/personal-administrativo/${DNI_Personal_Administrativo}`} className="mt-2">
+      <Link
+        href={`/personal-administrativo/${DNI_Personal_Administrativo}`}
+        className="mt-2"
+      >
         <BotonConIcono
           className="bg-amarillo-ediciones text-negro font-medium flex gap-1 items-center px-2.5 py-1.5 sxs-only:px-2 sxs-only:py-1 rounded text-[15px] sxs-only:text-[13px]"
           texto="Ver/Editar"

@@ -7,10 +7,14 @@ import {
   T_Responsables,
 } from "@prisma/client";
 import { RolesSistema } from "./RolesSistema";
+import { RDP02 } from "./RDP02Instancias";
+import { RDP03 } from "./RDP03Instancias";
 
 export interface JWTPayload {
   ID_Usuario: string;
   Rol: RolesSistema;
+  RDP02_INSTANCE?: RDP02;
+  RDP03_INSTANCE?: RDP03;
   Nombre_Usuario: string;
   iat: number;
   exp: number;

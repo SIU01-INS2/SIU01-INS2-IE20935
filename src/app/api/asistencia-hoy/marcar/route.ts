@@ -1,5 +1,4 @@
 import { NextRequest, NextResponse } from "next/server";
-import { NivelEducativo } from "@/interfaces/shared/NivelEducativo";
 import { EstadosAsistencia } from "@/interfaces/shared/EstadosAsistenciaEstudiantes";
 import { ActoresSistema } from "@/interfaces/shared/ActoresSistema";
 import {
@@ -16,28 +15,16 @@ import { ErrorResponseAPIBase } from "@/interfaces/shared/apis/types";
 import { RolesSistema } from "@/interfaces/shared/RolesSistema";
 import { TipoAsistencia } from "@/interfaces/shared/AsistenciaRequests";
 import { HORA_MAXIMA_EXPIRACION_PARA_REGISTROS_EN_REDIS } from "@/constants/expirations";
-
-// Función para determinar el tipo de asistencia según el actor y nivel educativo
-const determinarTipoAsistencia = (
-  actor: ActoresSistema | RolesSistema,
-  nivelDelEstudiante?: NivelEducativo
-): TipoAsistencia => {
-  if (actor === ActoresSistema.Estudiante) {
-    if (nivelDelEstudiante === NivelEducativo.PRIMARIA) {
-      return TipoAsistencia.ParaEstudiantesPrimaria;
-    } else {
-      return TipoAsistencia.ParaEstudiantesSecundaria;
-    }
-  } else {
-    // Todos los demás actores (profesores, auxiliares, etc.) usan el Redis para personal
-    return TipoAsistencia.ParaPersonal;
-  }
-};
+// import { ENTORNO } from "@/constants/ENTORNO";
+// import { Entorno } from "@/interfaces/shared/Entornos";
 
 // Función para obtener la fecha actual en Perú (UTC-5)
 const obtenerFechaActualPeru = (): string => {
+  
   const fecha = new Date();
+
   fecha.setHours(fecha.getHours() - 5); // Ajustar a hora de Perú (UTC-5)
+
   return fecha.toISOString().split("T")[0]; // Formato YYYY-MM-DD
 };
 
@@ -80,7 +67,10 @@ export async function POST(req: NextRequest) {
       DNI,
       FechaHoraEsperadaISO,
       ModoRegistro,
+      TipoAsistencia: tipoAsistenciaParam,
       NivelDelEstudiante,
+      Grado,
+      Seccion,
     } = body;
 
     // Validar DNI
@@ -97,11 +87,29 @@ export async function POST(req: NextRequest) {
     }
 
     // Validar Actor
-    if (!Object.values(ActoresSistema).includes(Actor as ActoresSistema)) {
+    if (
+      !Object.values(ActoresSistema).includes(Actor as ActoresSistema) &&
+      !Object.values(RolesSistema).includes(Actor as RolesSistema)
+    ) {
       return NextResponse.json(
         {
           success: false,
           message: "Actor no válido",
+          errorType: RequestErrorTypes.INVALID_PARAMETERS,
+        },
+        { status: 400 }
+      );
+    }
+
+    // Validar TipoAsistencia
+    if (
+      !tipoAsistenciaParam ||
+      !Object.values(TipoAsistencia).includes(tipoAsistenciaParam)
+    ) {
+      return NextResponse.json(
+        {
+          success: false,
+          message: "TipoAsistencia no válido o faltante",
           errorType: RequestErrorTypes.INVALID_PARAMETERS,
         },
         { status: 400 }
@@ -128,13 +136,49 @@ export async function POST(req: NextRequest) {
     const esEstudiante = Actor === ActoresSistema.Estudiante;
 
     if (esEstudiante) {
-      // Validar que se proporcionaron nivel para estudiantes
+      // Validar que se proporcionaron datos requeridos para estudiantes
       if (!NivelDelEstudiante) {
         return NextResponse.json(
           {
             success: false,
             message:
               "Se requiere nivel educativo para registrar asistencia de estudiantes",
+            errorType: RequestErrorTypes.INVALID_PARAMETERS,
+          },
+          { status: 400 }
+        );
+      }
+
+      if (!Grado || !Seccion) {
+        return NextResponse.json(
+          {
+            success: false,
+            message:
+              "Se requieren grado y sección para registrar asistencia de estudiantes",
+            errorType: RequestErrorTypes.INVALID_PARAMETERS,
+          },
+          { status: 400 }
+        );
+      }
+
+      // Validar que el grado sea numérico y esté en rango válido
+      if (typeof Grado !== "number" || Grado < 1 || Grado > 6) {
+        return NextResponse.json(
+          {
+            success: false,
+            message: "El grado debe ser un número entre 1 y 6",
+            errorType: RequestErrorTypes.INVALID_PARAMETERS,
+          },
+          { status: 400 }
+        );
+      }
+
+      // Validar que la sección sea una letra válida
+      if (typeof Seccion !== "string" || !/^[A-Z]$/.test(Seccion)) {
+        return NextResponse.json(
+          {
+            success: false,
+            message: "La sección debe ser una letra mayúscula (A-Z)",
             errorType: RequestErrorTypes.INVALID_PARAMETERS,
           },
           { status: 400 }
@@ -147,12 +191,20 @@ export async function POST(req: NextRequest) {
       (timestampActual - new Date(FechaHoraEsperadaISO).getTime()) / 1000
     );
 
-    // Crear clave para Redis con el formato correcto según el tipo de actor
+    // Crear clave para Redis
     const fechaHoy = obtenerFechaActualPeru();
-    const clave = `${fechaHoy}:${ModoRegistro}:${Actor}:${DNI}`;
+    let clave: string;
 
-    // Determinar el tipo de asistencia y obtener el cliente Redis correcto
-    const tipoAsistencia = determinarTipoAsistencia(Actor, NivelDelEstudiante);
+    if (esEstudiante) {
+      // Para estudiantes: incluir nivel, grado y sección en la clave
+      clave = `${fechaHoy}:${ModoRegistro}:${Actor}:${DNI}:${NivelDelEstudiante}:${Grado}:${Seccion}`;
+    } else {
+      // Para personal: clave tradicional
+      clave = `${fechaHoy}:${ModoRegistro}:${Actor}:${DNI}`;
+    }
+
+    // Usar el TipoAsistencia del request
+    const tipoAsistencia = tipoAsistenciaParam;
     const redisClientInstance = redisClient(tipoAsistencia);
 
     // Verificar si ya existe un registro en Redis
@@ -191,11 +243,6 @@ export async function POST(req: NextRequest) {
           timestamp: timestampActual,
           desfaseSegundos,
           esNuevoRegistro,
-          estado: esEstudiante
-            ? desfaseSegundos > MINUTOS_TOLERANCIA * 60
-              ? EstadosAsistencia.Tarde
-              : EstadosAsistencia.Temprano
-            : null,
         },
       } as RegistrarAsistenciaIndividualSuccessResponse,
       { status: 200 }

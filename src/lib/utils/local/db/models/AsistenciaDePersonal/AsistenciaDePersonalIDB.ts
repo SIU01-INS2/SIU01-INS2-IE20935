@@ -4,38 +4,57 @@ import { LogoutTypes, ErrorDetailsForLogout } from "@/interfaces/LogoutTypes";
 import IndexedDBConnection from "../../IndexedDBConnection";
 import { ModoRegistro } from "@/interfaces/shared/ModoRegistroPersonal";
 import {
-  ConsultarAsistenciasDiariasPorActorEnRedisResponseBody,
+  AsistenciaDiariaResultado,
+  ConsultarAsistenciasTomadasPorActorEnRedisResponseBody,
+  DetallesAsistenciaUnitariaPersonal,
+  EliminarAsistenciaRequestBody,
   RegistroAsistenciaUnitariaPersonal,
+  TipoAsistencia,
 } from "../../../../../../interfaces/shared/AsistenciaRequests";
 import { RolesSistema } from "@/interfaces/shared/RolesSistema";
 import { Meses } from "@/interfaces/shared/Meses";
 import { ActoresSistema } from "@/interfaces/shared/ActoresSistema";
-import { DetallesAsistenciaUnitariaPersonal } from "../../../../../../interfaces/shared/AsistenciaRequests";
+import {
+  ApiResponseBase,
+  ErrorResponseAPIBase,
+  MessageProperty,
+} from "@/interfaces/shared/apis/types";
+import AllErrorTypes, {
+  DataConflictErrorTypes,
+  SystemErrorTypes,
+  UserErrorTypes,
+  DataErrorTypes,
+} from "@/interfaces/shared/apis/errors";
+import { SiasisAPIS } from "@/interfaces/shared/SiasisComponents";
+import fetchSiasisApiGenerator from "@/lib/helpers/generators/fetchSiasisApisGenerator";
+import {
+  MINUTOS_TOLERANCIA_ENTRADA_PERSONAL,
+  MINUTOS_TOLERANCIA_SALIDA_PERSONAL,
+} from "@/constants/MINUTOS_TOLERANCIA_ASISTENCIA_PERSONAL";
+import { EstadosAsistenciaPersonal } from "@/interfaces/shared/EstadosAsistenciaPersonal";
+import { DIA_ESCOLAR_MINIMO_PARA_CONSULTAR_API } from "@/constants/DISPONIBILLIDAD_IDS_RDP02_GENERADOS";
+import {
+  AsistenciaCompletaMensualDePersonal,
+  GetAsistenciaMensualDePersonalSuccessResponse,
+} from "@/interfaces/shared/apis/api01/personal/types";
+import store from "@/global/store";
 
-export type EstadosAsistenciaDePersonal =
-  | "Puntual"
-  | "Tardanza"
-  | "Temprano"
-  | "Tarde"
-  | "Falta"
-  | "Tardanza Tolerada"
-  | "Cumplido"
-  | "Salida Anticipada Tolerada"
-  | "Salida Anticipada";
+// Re-exportar para acceso externo
+export { ModoRegistro } from "@/interfaces/shared/ModoRegistroPersonal";
 
 // Interfaces para los registros de entrada/salida
 export interface RegistroEntradaSalida {
-  timestamp: number; // Timestamp Unix en milisegundos
+  timestamp: number;
   desfaseSegundos: number;
-  estado: EstadosAsistenciaDePersonal;
+  estado: EstadosAsistenciaPersonal;
 }
 
 // Interfaces para asistencia mensual
 export interface AsistenciaMensualPersonal {
   Id_Registro_Mensual: number;
   mes: Meses;
-  Dni_Personal: string; // DNI del personal correspondiente
-  registros: Record<string, RegistroEntradaSalida>; // Clave: día del mes (1-31)
+  Dni_Personal: string;
+  registros: Record<string, RegistroEntradaSalida>;
 }
 
 // Enumeración para los diferentes tipos de personal
@@ -46,24 +65,31 @@ export enum TipoPersonal {
   PERSONAL_ADMINISTRATIVO = "personal_administrativo",
 }
 
-// Interfaces para las llaves compuestas
-export interface LlaveAsistenciaMensual {
-  Dni_Personal: string;
-  mes: Meses;
-}
-
 export class AsistenciaDePersonalIDB {
+  private siasisAPI: SiasisAPIS;
+  private setIsSomethingLoading: (isLoading: boolean) => void;
+  private setError: (error: ErrorResponseAPIBase | null) => void;
+  private setSuccessMessage?: (message: MessageProperty | null) => void;
+
+  // ✅ CONSTRUCTOR LIMPIO: Sin callback de marcado exitoso
+  constructor(
+    siasisAPI: SiasisAPIS,
+    setIsSomethingLoading: (isLoading: boolean) => void,
+    setError: (error: ErrorResponseAPIBase | null) => void,
+    setSuccessMessage?: (message: MessageProperty | null) => void
+  ) {
+    this.siasisAPI = siasisAPI;
+    this.setIsSomethingLoading = setIsSomethingLoading;
+    this.setError = setError;
+    this.setSuccessMessage = setSuccessMessage;
+  }
   /**
    * Obtiene el nombre del almacén según el tipo de personal y el modo de registro
-   * @param tipoPersonal Tipo de personal (profesor_primaria, profesor_secundaria, etc.)
-   * @param modoRegistro Modo de registro (Entrada o Salida)
-   * @returns Nombre del almacén correspondiente
    */
   private getStoreName(
     tipoPersonal: TipoPersonal,
     modoRegistro: ModoRegistro
   ): string {
-    // Mapeo de tipos de personal a nombres de store
     const storeMapping = {
       [TipoPersonal.PROFESOR_PRIMARIA]: {
         [ModoRegistro.Entrada]: "control_entrada_profesores_primaria",
@@ -88,8 +114,6 @@ export class AsistenciaDePersonalIDB {
 
   /**
    * Obtiene el nombre del campo de identificación según el tipo de personal
-   * @param tipoPersonal Tipo de personal
-   * @returns Nombre del campo de identificación
    */
   private getIdFieldName(tipoPersonal: TipoPersonal): string {
     const fieldMapping = {
@@ -103,10 +127,277 @@ export class AsistenciaDePersonalIDB {
   }
 
   /**
+   * Obtiene el nombre del campo ID según el tipo de personal y modo de registro
+   */
+  private getIdFieldForStore(
+    tipoPersonal: TipoPersonal,
+    modoRegistro: ModoRegistro
+  ): string {
+    const prefijo =
+      modoRegistro === ModoRegistro.Entrada ? "Id_C_E_M_P_" : "Id_C_S_M_P_";
+
+    switch (tipoPersonal) {
+      case TipoPersonal.PROFESOR_PRIMARIA:
+        return `${prefijo}Profesores_Primaria`;
+      case TipoPersonal.PROFESOR_SECUNDARIA:
+        return `${prefijo}Profesores_Secundaria`;
+      case TipoPersonal.AUXILIAR:
+        return `${prefijo}Auxiliar`;
+      case TipoPersonal.PERSONAL_ADMINISTRATIVO:
+        return `${prefijo}Administrativo`;
+      default:
+        throw new Error(`Tipo de personal no soportado: ${tipoPersonal}`);
+    }
+  }
+
+  /**
+   * Obtiene la fecha actual desde el estado de Redux
+   * @returns Objeto Date con la fecha actual según el estado global o null si no se puede obtener.
+   */
+  private obtenerFechaActualDesdeRedux(): Date | null {
+    try {
+      // Obtenemos el estado actual de Redux
+      const state = store.getState();
+
+      // Accedemos a la fecha del estado global
+      const fechaHoraRedux = state.others.fechaHoraActualReal.fechaHora;
+
+      // Si tenemos fecha en Redux, la usamos
+      if (fechaHoraRedux) {
+        return new Date(fechaHoraRedux);
+      }
+
+      // Si no se puede obtener la fecha de Redux, retornamos null
+      return null;
+    } catch (error) {
+      console.error(
+        "Error al obtener fecha desde Redux en AsistenciaDePersonalIDB:",
+        error
+      );
+      return null;
+    }
+  }
+
+  /**
+   * Obtiene el nombre del índice para la búsqueda por personal y mes
+   */
+  private getIndexNameForPersonalMes(tipoPersonal: TipoPersonal): string {
+    const indexMapping = {
+      [TipoPersonal.PROFESOR_PRIMARIA]: "por_profesor_mes",
+      [TipoPersonal.PROFESOR_SECUNDARIA]: "por_profesor_mes",
+      [TipoPersonal.AUXILIAR]: "por_auxiliar_mes",
+      [TipoPersonal.PERSONAL_ADMINISTRATIVO]: "por_administrativo_mes",
+    };
+
+    return indexMapping[tipoPersonal] || "por_profesor_mes";
+  }
+
+  /**
+   * Convierte un rol del sistema al tipo de personal correspondiente
+   */
+  private obtenerTipoPersonalDesdeRolOActor(
+    rol: RolesSistema | ActoresSistema
+  ): TipoPersonal {
+    switch (rol) {
+      case RolesSistema.ProfesorPrimaria:
+      case ActoresSistema.ProfesorPrimaria:
+        return TipoPersonal.PROFESOR_PRIMARIA;
+      case RolesSistema.ProfesorSecundaria:
+      case RolesSistema.Tutor:
+      case ActoresSistema.ProfesorSecundaria:
+        return TipoPersonal.PROFESOR_SECUNDARIA;
+      case RolesSistema.Auxiliar:
+      case ActoresSistema.Auxiliar:
+        return TipoPersonal.AUXILIAR;
+      case RolesSistema.PersonalAdministrativo:
+      case ActoresSistema.PersonalAdministrativo:
+        return TipoPersonal.PERSONAL_ADMINISTRATIVO;
+      default:
+        throw new Error(`Rol no válido o no soportado: ${rol}`);
+    }
+  }
+
+  /**
+   * Determina el estado de asistencia basado en el desfase de tiempo
+   */
+  private determinarEstadoAsistencia(
+    desfaseSegundos: number,
+    modoRegistro: ModoRegistro
+  ): EstadosAsistenciaPersonal {
+    const TOLERANCIA_TARDANZA = MINUTOS_TOLERANCIA_ENTRADA_PERSONAL * 60;
+    const TOLERANCIA_TEMPRANO = MINUTOS_TOLERANCIA_SALIDA_PERSONAL * 60;
+
+    if (modoRegistro === ModoRegistro.Entrada) {
+      if (desfaseSegundos <= 0) {
+        return EstadosAsistenciaPersonal.En_Tiempo;
+      } else if (desfaseSegundos <= TOLERANCIA_TARDANZA) {
+        return EstadosAsistenciaPersonal.En_Tiempo; // Tolerancia de 5 minutos
+      } else {
+        return EstadosAsistenciaPersonal.Tarde;
+      }
+    } else {
+      if (desfaseSegundos >= 0) {
+        return EstadosAsistenciaPersonal.Cumplido;
+      } else if (desfaseSegundos >= -TOLERANCIA_TEMPRANO) {
+        return EstadosAsistenciaPersonal.Cumplido; // Tolerancia de 15 minutos
+      } else {
+        return EstadosAsistenciaPersonal.Salida_Anticipada;
+      }
+    }
+  }
+
+  /**
+   * Calcula el día escolar del mes (sin contar fines de semana)
+   */
+  private calcularDiaEscolarDelMes(): number {
+    const fechaActual = new Date();
+    const anio = fechaActual.getFullYear();
+    const mes = fechaActual.getMonth(); // 0-11
+    const diaActual = fechaActual.getDate();
+
+    let diaEscolar = 0;
+
+    // Contar solo días hábiles (lunes a viernes) desde el inicio del mes hasta hoy
+    for (let dia = 1; dia <= diaActual; dia++) {
+      const fecha = new Date(anio, mes, dia);
+      const diaSemana = fecha.getDay(); // 0=domingo, 1=lunes, ..., 6=sábado
+
+      // Si es día hábil (lunes a viernes)
+      if (diaSemana >= 1 && diaSemana <= 5) {
+        diaEscolar++;
+      }
+    }
+
+    return diaEscolar;
+  }
+
+  /**
+   * Determina si debemos consultar la API basándose en el día escolar
+   */
+  private debeConsultarAPI(diaEscolar: number): boolean {
+    // Si estamos en el primer día escolar del mes, es seguro que no hay IDs en PostgreSQL
+    if (diaEscolar <= 1) {
+      return false;
+    }
+
+    // A partir del segundo día escolar, es probable que ya tengamos registros con IDs
+    return diaEscolar >= DIA_ESCOLAR_MINIMO_PARA_CONSULTAR_API;
+  }
+
+  /**
+   * ✅ NUEVA FUNCIÓN: Verifica si los registros locales necesitan actualización
+   */
+  private verificarSiNecesitaActualizacion(
+    registroEntrada: AsistenciaMensualPersonal | null,
+    registroSalida: AsistenciaMensualPersonal | null,
+    diaActual: number
+  ): boolean {
+    // Calcular el último día registrado en ambos registros
+    let ultimoDiaEntrada = 0;
+    let ultimoDiaSalida = 0;
+
+    if (registroEntrada && registroEntrada.registros) {
+      const diasEntrada = Object.keys(registroEntrada.registros)
+        .map((d) => parseInt(d))
+        .filter((d) => !isNaN(d));
+      ultimoDiaEntrada = diasEntrada.length > 0 ? Math.max(...diasEntrada) : 0;
+    }
+
+    if (registroSalida && registroSalida.registros) {
+      const diasSalida = Object.keys(registroSalida.registros)
+        .map((d) => parseInt(d))
+        .filter((d) => !isNaN(d));
+      ultimoDiaSalida = diasSalida.length > 0 ? Math.max(...diasSalida) : 0;
+    }
+
+    const ultimoDiaLocal = Math.max(ultimoDiaEntrada, ultimoDiaSalida);
+
+    // Si el último día local es menor que el día actual - 1, necesita actualización
+    // (dejamos margen de 1 día para evitar consultas constantes)
+    const necesitaActualizacion = ultimoDiaLocal < diaActual - 1;
+
+    console.log(`🔍 Verificación actualización:`, {
+      ultimoDiaEntrada,
+      ultimoDiaSalida,
+      ultimoDiaLocal,
+      diaActual,
+      necesitaActualizacion,
+    });
+
+    return necesitaActualizacion;
+  }
+
+  /**
+   * ✅ NUEVA FUNCIÓN: Elimina registros mensuales locales
+   */
+  private async eliminarRegistroMensual(
+    tipoPersonal: TipoPersonal,
+    modoRegistro: ModoRegistro,
+    dni: string,
+    mes: number
+  ): Promise<void> {
+    try {
+      await IndexedDBConnection.init();
+      const storeName = this.getStoreName(tipoPersonal, modoRegistro);
+      const store = await IndexedDBConnection.getStore(storeName, "readwrite");
+      const indexName = this.getIndexNameForPersonalMes(tipoPersonal);
+
+      return new Promise((resolve, reject) => {
+        try {
+          const index = store.index(indexName);
+          const keyValue = [dni, mes];
+          const request = index.get(keyValue);
+
+          request.onsuccess = () => {
+            if (request.result) {
+              const idField = this.getIdFieldForStore(
+                tipoPersonal,
+                modoRegistro
+              );
+              const id = request.result[idField];
+
+              const deleteRequest = store.delete(id);
+              deleteRequest.onsuccess = () => {
+                console.log(
+                  `🗑️ Registro eliminado: ${storeName} - ${dni} - mes ${mes}`
+                );
+                resolve();
+              };
+              deleteRequest.onerror = (event) => {
+                reject(
+                  new Error(
+                    `Error al eliminar registro: ${
+                      (event.target as IDBRequest).error
+                    }`
+                  )
+                );
+              };
+            } else {
+              resolve(); // No hay registro que eliminar
+            }
+          };
+
+          request.onerror = (event) => {
+            reject(
+              new Error(
+                `Error al buscar registro para eliminar: ${
+                  (event.target as IDBRequest).error
+                }`
+              )
+            );
+          };
+        } catch (error) {
+          reject(error);
+        }
+      });
+    } catch (error) {
+      console.error("Error al eliminar registro mensual:", error);
+      throw error;
+    }
+  }
+
+  /**
    * Maneja los errores según su tipo y realiza logout si es necesario
-   * @param error Error capturado
-   * @param operacion Descripción de la operación que falló
-   * @param detalles Detalles adicionales del error
    */
   private handleError(
     error: unknown,
@@ -115,16 +406,14 @@ export class AsistenciaDePersonalIDB {
   ): void {
     console.error(`Error en AsistenciaDePersonalIDB (${operacion}):`, error);
 
-    // Crear objeto con detalles del error
     const errorDetails: ErrorDetailsForLogout = {
       origen: `AsistenciaDePersonalIDB.${operacion}`,
       mensaje: error instanceof Error ? error.message : String(error),
       timestamp: Date.now(),
       contexto: JSON.stringify(detalles || {}),
-      siasisComponent: "CLN02",
+      siasisComponent: "CLN01",
     };
 
-    // Determinar el tipo de error
     let logoutType: LogoutTypes;
 
     if (error instanceof Error) {
@@ -139,113 +428,246 @@ export class AsistenciaDePersonalIDB {
       logoutType = LogoutTypes.ERROR_SISTEMA;
     }
 
-    // Cerrar sesión con los detalles del error
     logout(logoutType, errorDetails);
   }
 
   /**
-   * Obtiene el nombre del índice para la búsqueda por personal (solo DNI)
-   * @param tipoPersonal Tipo de personal
-   * @returns Nombre del índice
+   * Verifica si existe un registro mensual para un personal específico
    */
-  private getIndexNameForPersonal(tipoPersonal: TipoPersonal): string {
-    // Mapeo de tipos de personal a nombres de índice
-    const indexMapping = {
-      [TipoPersonal.PROFESOR_PRIMARIA]: "por_profesor",
-      [TipoPersonal.PROFESOR_SECUNDARIA]: "por_profesor",
-      [TipoPersonal.AUXILIAR]: "por_auxiliar",
-      [TipoPersonal.PERSONAL_ADMINISTRATIVO]: "por_administrativo",
-    };
-
-    return indexMapping[tipoPersonal];
-  }
-
-  /**
-   * Obtiene el nombre del índice para la búsqueda por personal y mes
-   * @param tipoPersonal Tipo de personal
-   * @returns Nombre del índice
-   */
-  private getIndexNameForPersonalMes(tipoPersonal: TipoPersonal): string {
-    // Mapeo de tipos de personal a nombres de índice
-    const indexMapping = {
-      [TipoPersonal.PROFESOR_PRIMARIA]: "por_profesor_mes",
-      [TipoPersonal.PROFESOR_SECUNDARIA]: "por_profesor_mes",
-      [TipoPersonal.AUXILIAR]: "por_auxiliar_mes",
-      [TipoPersonal.PERSONAL_ADMINISTRATIVO]: "por_administrativo_mes",
-    };
-
-    return indexMapping[tipoPersonal] || "por_profesor_mes";
-  }
-
-  /**
-   * Mapea un registro obtenido del store a la interfaz AsistenciaMensualPersonal
-   * @param registroStore Registro obtenido del store
-   * @param tipoPersonal Tipo de personal
-   * @param modoRegistro Modo de registro (Entrada o Salida)
-   * @returns Registro mensual en formato AsistenciaMensualPersonal
-   */
-  private mapearRegistroMensualDesdeStore(
-    registroStore: any,
+  private async verificarExistenciaRegistroMensual(
     tipoPersonal: TipoPersonal,
-    modoRegistro: ModoRegistro
-  ): AsistenciaMensualPersonal {
-    // Obtener el campo ID según el tipo de personal y modo
-    const idField = this.getIdFieldForStore(tipoPersonal, modoRegistro);
+    modoRegistro: ModoRegistro,
+    dni: string,
+    mes: number
+  ): Promise<number | null> {
+    try {
+      await IndexedDBConnection.init();
+      const storeName = this.getStoreName(tipoPersonal, modoRegistro);
+      const store = await IndexedDBConnection.getStore(storeName, "readonly");
+      const indexName = this.getIndexNameForPersonalMes(tipoPersonal);
+      const idField = this.getIdFieldForStore(tipoPersonal, modoRegistro);
 
-    // Obtener el campo de ID personal
-    const idPersonalField = this.getIdFieldName(tipoPersonal);
+      return new Promise((resolve, reject) => {
+        try {
+          const index = store.index(indexName);
+          const keyValue = [dni, mes];
+          const request = index.get(keyValue);
 
-    // Mapear a nuestra interfaz
-    return {
-      Id_Registro_Mensual: registroStore[idField],
-      mes: registroStore.Mes,
-      Dni_Personal: registroStore[idPersonalField],
-      registros:
-        modoRegistro === ModoRegistro.Entrada
-          ? registroStore.Entradas
-          : registroStore.Salidas,
-    };
+          request.onsuccess = () => {
+            if (request.result) {
+              resolve(request.result[idField]);
+            } else {
+              resolve(null);
+            }
+          };
+
+          request.onerror = (event) => {
+            reject(
+              new Error(
+                `Error al verificar existencia: ${
+                  (event.target as IDBRequest).error
+                }`
+              )
+            );
+          };
+        } catch (error) {
+          reject(error);
+        }
+      });
+    } catch (error) {
+      console.error(
+        "Error al verificar existencia de registro mensual:",
+        error
+      );
+      return null;
+    }
   }
 
   /**
-   * Obtiene el nombre del campo ID según el tipo de personal y modo de registro
-   * @param tipoPersonal Tipo de personal
-   * @param modoRegistro Modo de registro
-   * @returns Nombre del campo ID
+   * Consulta la API para obtener asistencias mensuales
    */
-  private getIdFieldForStore(
-    tipoPersonal: TipoPersonal,
+  private async consultarAsistenciasMensualesAPI(
+    rol: RolesSistema | ActoresSistema,
+    dni: string,
+    mes: number
+  ): Promise<AsistenciaCompletaMensualDePersonal | null> {
+    try {
+      const { fetchSiasisAPI } = fetchSiasisApiGenerator(this.siasisAPI);
+
+      const fetchCancelable = await fetchSiasisAPI({
+        endpoint: `/api/personal/asistencias-mensuales?Rol=${rol}&DNI=${dni}&Mes=${mes}`,
+        method: "GET",
+      });
+
+      if (!fetchCancelable) {
+        throw new Error(
+          "No se pudo crear la petición de asistencias mensuales"
+        );
+      }
+
+      const response = await fetchCancelable.fetch();
+
+      if (!response.ok) {
+        if (response.status === 404) {
+          return null;
+        }
+        throw new Error(`Error al obtener asistencias: ${response.statusText}`);
+      }
+
+      const objectResponse = (await response.json()) as ApiResponseBase;
+
+      if (!objectResponse.success) {
+        if (
+          (objectResponse as ErrorResponseAPIBase).errorType ===
+          DataErrorTypes.NO_DATA_AVAILABLE
+        ) {
+          return null;
+        }
+        throw new Error(`Error en respuesta: ${objectResponse.message}`);
+      }
+
+      const { data } =
+        objectResponse as GetAsistenciaMensualDePersonalSuccessResponse;
+      return data;
+    } catch (error) {
+      console.error(
+        "Error al consultar asistencias mensuales desde API:",
+        error
+      );
+      return null;
+    }
+  }
+
+  /**
+   * Procesa los registros JSON de la API
+   */
+  private procesarRegistrosJSON(
+    registrosJSON: any,
     modoRegistro: ModoRegistro
-  ): string {
-    const prefijo =
-      modoRegistro === ModoRegistro.Entrada ? "Id_C_E_M_P_" : "Id_C_S_M_P_";
+  ): Record<string, RegistroEntradaSalida> {
+    const registrosProcesados: Record<string, RegistroEntradaSalida> = {};
 
-    switch (tipoPersonal) {
-      case TipoPersonal.PROFESOR_PRIMARIA:
-        return `${prefijo}Profesores_Primaria`;
+    Object.entries(registrosJSON).forEach(
+      ([dia, registroRaw]: [string, any]) => {
+        if (registroRaw === null) {
+          registrosProcesados[dia] = {
+            timestamp: 0,
+            desfaseSegundos: 0,
+            estado: EstadosAsistenciaPersonal.Inactivo,
+          };
+          return;
+        }
 
-      case TipoPersonal.PROFESOR_SECUNDARIA:
-        return `${prefijo}Profesores_Secundaria`;
+        if (registroRaw && typeof registroRaw === "object") {
+          const timestamp = registroRaw.Timestamp;
+          const desfaseSegundos = registroRaw.DesfaseSegundos;
 
-      case TipoPersonal.AUXILIAR:
-        return `${prefijo}Auxiliar`;
+          if (timestamp === null && desfaseSegundos === null) {
+            registrosProcesados[dia] = {
+              timestamp: 0,
+              desfaseSegundos: 0,
+              estado: EstadosAsistenciaPersonal.Falta,
+            };
+            return;
+          }
 
-      case TipoPersonal.PERSONAL_ADMINISTRATIVO:
-        return `${prefijo}Administrativo`;
+          if (timestamp === null) {
+            registrosProcesados[dia] = {
+              timestamp: 0,
+              desfaseSegundos: 0,
+              estado: EstadosAsistenciaPersonal.Inactivo,
+            };
+            return;
+          }
 
-      default:
-        throw new Error(`Tipo de personal no soportado: ${tipoPersonal}`);
+          if (desfaseSegundos === null) {
+            registrosProcesados[dia] = {
+              timestamp: timestamp || 0,
+              desfaseSegundos: 0,
+              estado: EstadosAsistenciaPersonal.Sin_Registro,
+            };
+            return;
+          }
+
+          const estado = this.determinarEstadoAsistencia(
+            desfaseSegundos,
+            modoRegistro
+          );
+
+          registrosProcesados[dia] = {
+            timestamp: timestamp || 0,
+            desfaseSegundos: desfaseSegundos || 0,
+            estado,
+          };
+        }
+      }
+    );
+
+    return registrosProcesados;
+  }
+
+  /**
+   * Guarda un registro mensual de asistencia usando el ID real de la API
+   */
+  public async guardarRegistroMensual(
+    tipoPersonal: TipoPersonal,
+    modoRegistro: ModoRegistro,
+    datos: AsistenciaMensualPersonal
+  ): Promise<void> {
+    try {
+      await IndexedDBConnection.init();
+      const storeName = this.getStoreName(tipoPersonal, modoRegistro);
+      const store = await IndexedDBConnection.getStore(storeName, "readwrite");
+      const idFieldName = this.getIdFieldName(tipoPersonal);
+      const idField = this.getIdFieldForStore(tipoPersonal, modoRegistro);
+
+      return new Promise((resolve, reject) => {
+        try {
+          const registroToSave: any = {
+            [idField]: datos.Id_Registro_Mensual,
+            Mes: datos.mes,
+            [idFieldName]: datos.Dni_Personal,
+          };
+
+          if (modoRegistro === ModoRegistro.Entrada) {
+            registroToSave.Entradas = datos.registros;
+          } else {
+            registroToSave.Salidas = datos.registros;
+          }
+
+          const putRequest = store.put(registroToSave);
+
+          putRequest.onsuccess = () => {
+            resolve();
+          };
+
+          putRequest.onerror = (event) => {
+            reject(
+              new Error(
+                `Error al guardar registro mensual: ${
+                  (event.target as IDBRequest).error
+                }`
+              )
+            );
+          };
+        } catch (error) {
+          reject(error);
+        }
+      });
+    } catch (error) {
+      this.handleError(error, "guardarRegistroMensual", {
+        tipoPersonal,
+        modoRegistro,
+        Dni_Personal: datos.Dni_Personal,
+        mes: datos.mes,
+        Id_Registro_Mensual: datos.Id_Registro_Mensual,
+      });
+      throw error;
     }
   }
 
   /**
    * Obtiene el registro mensual de asistencia para un personal específico
-   * @param tipoPersonal Tipo de personal
-   * @param modoRegistro Modo de registro (Entrada o Salida)
-   * @param Dni_Personal ID del personal (DNI)
-   * @param mes Número de mes (1-12)
-   * @param id_registro_mensual ID opcional del registro mensual proporcionado por la API
-   * @returns Promesa que resuelve al registro mensual de asistencia o null si no existe
    */
   public async obtenerRegistroMensual(
     tipoPersonal: TipoPersonal,
@@ -255,25 +677,17 @@ export class AsistenciaDePersonalIDB {
     id_registro_mensual?: number
   ): Promise<AsistenciaMensualPersonal | null> {
     try {
-      // Inicializar la conexión
       await IndexedDBConnection.init();
-
-      // Obtener el nombre del store correspondiente
       const storeName = this.getStoreName(tipoPersonal, modoRegistro);
-
-      // Obtener el store
       const store = await IndexedDBConnection.getStore(storeName, "readonly");
 
-      // Si tenemos el ID del registro mensual, podemos obtenerlo directamente
       if (id_registro_mensual) {
         return new Promise((resolve, reject) => {
           try {
-            // Usar el ID como clave primaria
             const request = store.get(id_registro_mensual);
 
             request.onsuccess = () => {
               if (request.result) {
-                // Transformar el resultado al formato de nuestra interfaz
                 const registroMensual: AsistenciaMensualPersonal =
                   this.mapearRegistroMensualDesdeStore(
                     request.result,
@@ -301,19 +715,16 @@ export class AsistenciaDePersonalIDB {
         });
       }
 
-      // Si no tenemos el ID, debemos buscar por índice compuesto (DNI + mes)
       const indexName = this.getIndexNameForPersonalMes(tipoPersonal);
 
       return new Promise((resolve, reject) => {
         try {
-          // Usamos el índice para buscar por la clave compuesta
           const index = store.index(indexName);
           const keyValue = [Dni_Personal, mes];
           const request = index.get(keyValue);
 
           request.onsuccess = () => {
             if (request.result) {
-              // Transformar el resultado al formato de nuestra interfaz
               const registroMensual: AsistenciaMensualPersonal =
                 this.mapearRegistroMensualDesdeStore(
                   request.result,
@@ -352,175 +763,685 @@ export class AsistenciaDePersonalIDB {
   }
 
   /**
-   * Guarda un registro mensual de asistencia
-   * @param tipoPersonal Tipo de personal
-   * @param modoRegistro Modo de registro (Entrada o Salida)
-   * @param datos Datos del registro mensual a guardar
-   * @returns Promesa que se resuelve cuando se completa la operación
+   * Mapea un registro obtenido del store a la interfaz AsistenciaMensualPersonal
    */
-  public async guardarRegistroMensual(
+  private mapearRegistroMensualDesdeStore(
+    registroStore: any,
+    tipoPersonal: TipoPersonal,
+    modoRegistro: ModoRegistro
+  ): AsistenciaMensualPersonal {
+    const idField = this.getIdFieldForStore(tipoPersonal, modoRegistro);
+    const idPersonalField = this.getIdFieldName(tipoPersonal);
+
+    return {
+      Id_Registro_Mensual: registroStore[idField],
+      mes: registroStore.Mes,
+      Dni_Personal: registroStore[idPersonalField],
+      registros:
+        modoRegistro === ModoRegistro.Entrada
+          ? registroStore.Entradas
+          : registroStore.Salidas,
+    };
+  }
+
+  /**
+   * Actualiza un registro existente agregando un nuevo día
+   */
+  private async actualizarRegistroExistente(
     tipoPersonal: TipoPersonal,
     modoRegistro: ModoRegistro,
-    datos: AsistenciaMensualPersonal
+    dni: string,
+    mes: number,
+    dia: number,
+    registro: RegistroEntradaSalida,
+    idRegistroExistente: number
   ): Promise<void> {
     try {
-      // Inicializar la conexión
-      await IndexedDBConnection.init();
-
-      // Obtener el nombre del store correspondiente
-      const storeName = this.getStoreName(tipoPersonal, modoRegistro);
-
-      // Obtener el store
-      const store = await IndexedDBConnection.getStore(storeName, "readwrite");
-
-      // Obtener el campo de ID correspondiente
-      const idFieldName = this.getIdFieldName(tipoPersonal);
-      const idField = this.getIdFieldForStore(tipoPersonal, modoRegistro);
-
-      return new Promise((resolve, reject) => {
-        try {
-          // Preparar datos en el formato esperado por el store
-          const registroToSave: any = {
-            [idField]: datos.Id_Registro_Mensual,
-            Mes: datos.mes,
-            [idFieldName]: datos.Dni_Personal,
-          };
-
-          // Agregar los registros de entrada o salida según corresponda
-          if (modoRegistro === ModoRegistro.Entrada) {
-            registroToSave.Entradas = datos.registros;
-          } else {
-            registroToSave.Salidas = datos.registros;
-          }
-
-          // Guardar el registro
-          const putRequest = store.put(registroToSave);
-
-          putRequest.onsuccess = () => {
-            resolve();
-          };
-
-          putRequest.onerror = (event) => {
-            reject(
-              new Error(
-                `Error al guardar registro mensual: ${
-                  (event.target as IDBRequest).error
-                }`
-              )
-            );
-          };
-        } catch (error) {
-          reject(error);
-        }
-      });
-    } catch (error) {
-      this.handleError(error, "guardarRegistroMensual", {
+      const registroActual = await this.obtenerRegistroMensual(
         tipoPersonal,
         modoRegistro,
-        Dni_Personal: datos.Dni_Personal,
-        mes: datos.mes,
-        Id_Registro_Mensual: datos.Id_Registro_Mensual,
+        dni,
+        mes,
+        idRegistroExistente
+      );
+
+      if (registroActual) {
+        registroActual.registros[dia.toString()] = registro;
+        await this.guardarRegistroMensual(
+          tipoPersonal,
+          modoRegistro,
+          registroActual
+        );
+      }
+    } catch (error) {
+      this.handleError(error, "actualizarRegistroExistente", {
+        tipoPersonal,
+        modoRegistro,
+        dni,
+        mes,
+        dia,
       });
       throw error;
     }
   }
 
   /**
-   * Obtiene el último registro de asistencia guardado para un personal específico
-   * consultando directamente la tabla correspondiente y buscando el registro más reciente
-   * @param tipoPersonal Tipo de personal
-   * @param modoRegistro Modo de registro (Entrada o Salida)
-   * @param Dni_Personal ID del personal (DNI)
-   * @returns Promesa que resuelve al último registro o null si no existe
+   * Obtiene asistencias mensuales con lógica simplificada
+   * LÓGICA: Si existe en IndexedDB lo devuelve, si no existe consulta API una sola vez
    */
-  public async obtenerUltimoRegistro(
+  public async obtenerAsistenciaMensualConAPI(
     rol: RolesSistema,
-    modoRegistro: ModoRegistro,
-    Dni_Personal: string
+    dni: string,
+    mes: number
   ): Promise<{
-    tipoPersonal: TipoPersonal;
-    modoRegistro: ModoRegistro;
-    Dni_Personal: string;
-    dia: number;
-    mes: number;
-    Id_Registro_Mensual: number;
-    registro: RegistroEntradaSalida;
-  } | null> {
+    entrada?: AsistenciaMensualPersonal;
+    salida?: AsistenciaMensualPersonal;
+    encontrado: boolean;
+    mensaje: string;
+  }> {
     try {
       const tipoPersonal = this.obtenerTipoPersonalDesdeRolOActor(rol);
 
-      // Inicializar la conexión
+      // PASO 1: Buscar primero en IndexedDB local (entrada y salida)
+      const [registroEntradaLocal, registroSalidaLocal] = await Promise.all([
+        this.obtenerRegistroMensual(
+          tipoPersonal,
+          ModoRegistro.Entrada,
+          dni,
+          mes
+        ),
+        this.obtenerRegistroMensual(
+          tipoPersonal,
+          ModoRegistro.Salida,
+          dni,
+          mes
+        ),
+      ]);
+
+      // PASO 2: Si hay datos locales, los devolvemos directamente
+      if (registroEntradaLocal || registroSalidaLocal) {
+        console.log(
+          `📱 Datos encontrados en IndexedDB para ${dni} - mes ${mes}`
+        );
+
+        return {
+          entrada: registroEntradaLocal || undefined,
+          salida: registroSalidaLocal || undefined,
+          encontrado: true,
+          mensaje: "Datos obtenidos desde IndexedDB local",
+        };
+      }
+
+      // PASO 3: No hay datos locales, consultar API una sola vez
+      console.log(
+        `📡 No hay datos locales, consultando API para ${dni} - mes ${mes}...`
+      );
+
+      const asistenciaAPI = await this.consultarAsistenciasMensualesAPI(
+        rol,
+        dni,
+        mes
+      );
+
+      if (asistenciaAPI) {
+        // PASO 4: Procesar y guardar datos de la API
+        console.log(
+          `✅ API devolvió datos para ${dni} - mes ${mes}, guardando en IndexedDB...`
+        );
+
+        await this.procesarYGuardarAsistenciaDesdeAPI(asistenciaAPI);
+
+        // Obtener los registros recién guardados
+        const [nuevaEntrada, nuevaSalida] = await Promise.all([
+          this.obtenerRegistroMensual(
+            tipoPersonal,
+            ModoRegistro.Entrada,
+            dni,
+            mes,
+            asistenciaAPI.Id_Registro_Mensual_Entrada
+          ),
+          this.obtenerRegistroMensual(
+            tipoPersonal,
+            ModoRegistro.Salida,
+            dni,
+            mes,
+            asistenciaAPI.Id_Registro_Mensual_Salida
+          ),
+        ]);
+
+        return {
+          entrada: nuevaEntrada || undefined,
+          salida: nuevaSalida || undefined,
+          encontrado: true,
+          mensaje: "Datos obtenidos y guardados desde la API",
+        };
+      } else {
+        // PASO 5: La API no tiene datos
+        console.log(`❌ API no devolvió datos para ${dni} - mes ${mes}`);
+
+        return {
+          encontrado: false,
+          mensaje:
+            "No se encontraron registros de asistencia para el mes consultado",
+        };
+      }
+    } catch (error) {
+      console.error("Error al obtener asistencias mensuales con API:", error);
+      this.handleError(error, "obtenerAsistenciaMensualConAPI", {
+        rol,
+        dni,
+        mes,
+      });
+
+      return {
+        encontrado: false,
+        mensaje: "Error al obtener los datos de asistencia",
+      };
+    }
+  }
+
+  private async procesarYGuardarAsistenciaDesdeAPI(
+    asistenciaAPI: AsistenciaCompletaMensualDePersonal,
+    modoRegistroSolicitado?: ModoRegistro
+  ): Promise<void> {
+    const tipoPersonal = this.obtenerTipoPersonalDesdeRolOActor(
+      asistenciaAPI.Rol
+    );
+
+    const procesarYGuardar = async (modoRegistro: ModoRegistro) => {
+      const registrosData =
+        modoRegistro === ModoRegistro.Entrada
+          ? asistenciaAPI.Entradas
+          : asistenciaAPI.Salidas;
+
+      const idReal =
+        modoRegistro === ModoRegistro.Entrada
+          ? asistenciaAPI.Id_Registro_Mensual_Entrada
+          : asistenciaAPI.Id_Registro_Mensual_Salida;
+
+      const registrosProcesados = this.procesarRegistrosJSON(
+        registrosData,
+        modoRegistro
+      );
+
+      if (Object.keys(registrosProcesados).length > 0) {
+        await this.guardarRegistroMensual(tipoPersonal, modoRegistro, {
+          Id_Registro_Mensual: idReal,
+          mes: asistenciaAPI.Mes,
+          Dni_Personal: asistenciaAPI.DNI_Usuario,
+          registros: registrosProcesados,
+        });
+      }
+    };
+
+    if (modoRegistroSolicitado) {
+      await procesarYGuardar(modoRegistroSolicitado);
+    } else {
+      await Promise.all([
+        procesarYGuardar(ModoRegistro.Entrada),
+        procesarYGuardar(ModoRegistro.Salida),
+      ]);
+    }
+  }
+
+  /**
+   * ✅ NUEVA FUNCIÓN: Fuerza la actualización desde la API eliminando datos locales
+   */
+  public async forzarActualizacionDesdeAPI(
+    rol: RolesSistema,
+    dni: string,
+    mes: number
+  ): Promise<{
+    entrada?: AsistenciaMensualPersonal;
+    salida?: AsistenciaMensualPersonal;
+    encontrado: boolean;
+    mensaje: string;
+  }> {
+    try {
+      const tipoPersonal = this.obtenerTipoPersonalDesdeRolOActor(rol);
+
+      console.log(
+        `🔄 Forzando actualización desde API para ${rol} ${dni} - mes ${mes}...`
+      );
+
+      // Eliminar registros locales existentes
+      await Promise.all([
+        this.eliminarRegistroMensual(
+          tipoPersonal,
+          ModoRegistro.Entrada,
+          dni,
+          mes
+        ),
+        this.eliminarRegistroMensual(
+          tipoPersonal,
+          ModoRegistro.Salida,
+          dni,
+          mes
+        ),
+      ]);
+
+      // Consultar API y guardar
+      return await this.obtenerAsistenciaMensualConAPI(rol, dni, mes);
+    } catch (error) {
+      console.error("Error al forzar actualización desde API:", error);
+      this.handleError(error, "forzarActualizacionDesdeAPI", {
+        rol,
+        dni,
+        mes,
+      });
+
+      return {
+        encontrado: false,
+        mensaje: "Error al forzar la actualización de datos",
+      };
+    }
+  }
+
+  /**
+   * Obtiene todos los días laborales anteriores al día actual en el mes (usando fecha Redux)
+   */
+  private obtenerDiasLaboralesAnteriores(): number[] {
+    const fechaActual = this.obtenerFechaActualDesdeRedux();
+
+    if (!fechaActual) {
+      console.error("No se pudo obtener la fecha desde Redux");
+      return [];
+    }
+
+    const anio = fechaActual.getFullYear();
+    const mes = fechaActual.getMonth(); // 0-11
+    const diaActual = fechaActual.getDate();
+
+    const diasLaborales: number[] = [];
+
+    // Buscar días hábiles (lunes a viernes) desde el inicio del mes hasta AYER
+    for (let dia = 1; dia < diaActual; dia++) {
+      // Nota: dia < diaActual (no <=)
+      const fecha = new Date(anio, mes, dia);
+      const diaSemana = fecha.getDay(); // 0=domingo, 1=lunes, ..., 6=sábado
+
+      // Si es día hábil (lunes a viernes)
+      if (diaSemana >= 1 && diaSemana <= 5) {
+        diasLaborales.push(dia);
+      }
+    }
+
+    return diasLaborales;
+  }
+
+  /**
+   * Verifica si el registro mensual tiene TODOS los días laborales anteriores
+   */
+  private verificarRegistroMensualCompleto(
+    registroMensual: AsistenciaMensualPersonal | null,
+    diasLaboralesAnteriores: number[]
+  ): boolean {
+    if (!registroMensual || !registroMensual.registros) {
+      return false;
+    }
+
+    // Si no hay días laborales anteriores (primer día laboral del mes), consideramos completo
+    if (diasLaboralesAnteriores.length === 0) {
+      return true;
+    }
+
+    // Verificar que TODOS los días laborales anteriores estén registrados
+    for (const diaLaboral of diasLaboralesAnteriores) {
+      const diaRegistrado = registroMensual.registros[diaLaboral.toString()];
+      if (!diaRegistrado) {
+        console.log(
+          `❌ Falta el día laboral ${diaLaboral} en el registro mensual`
+        );
+        return false;
+      }
+    }
+
+    console.log(
+      `✅ Todos los días laborales anteriores están registrados: [${diasLaboralesAnteriores.join(
+        ", "
+      )}]`
+    );
+    return true;
+  }
+
+  /**
+   * Marca la asistencia de entrada o salida para un personal específico
+   * REGLA COMPLETA: Solo consulta API si NO existe registro mensual O si faltan días laborales anteriores
+   * USA FECHA REDUX en lugar de fecha local
+   */
+  public async marcarAsistencia({
+    datos,
+  }: {
+    datos: RegistroAsistenciaUnitariaPersonal;
+  }): Promise<void> {
+    try {
+      const {
+        ModoRegistro: modoRegistro,
+        DNI: dni,
+        Rol: rol,
+        Dia: dia,
+        Detalles,
+      } = datos;
+
+      // ✅ USAR FECHA REDUX en lugar de fecha del timestamp
+      const fechaActualRedux = this.obtenerFechaActualDesdeRedux();
+      if (!fechaActualRedux) {
+        throw new Error("No se pudo obtener la fecha desde Redux");
+      }
+
+      const tipoPersonal = this.obtenerTipoPersonalDesdeRolOActor(rol);
+      const mes = fechaActualRedux.getMonth() + 1; // Usar mes de Redux
+
+      const estado = this.determinarEstadoAsistencia(
+        (Detalles as DetallesAsistenciaUnitariaPersonal)!.DesfaseSegundos,
+        modoRegistro
+      );
+
+      const registro: RegistroEntradaSalida = {
+        timestamp: (Detalles as DetallesAsistenciaUnitariaPersonal)!.Timestamp,
+        estado: estado,
+        desfaseSegundos: (Detalles as DetallesAsistenciaUnitariaPersonal)!
+          .DesfaseSegundos,
+      };
+
+      console.log(
+        `🚀 Iniciando marcado de asistencia: ${dni} - ${modoRegistro} - día ${dia} (fecha Redux: ${fechaActualRedux.toISOString()})`
+      );
+
+      // PASO 1: Obtener todos los días laborales anteriores al día actual (usando fecha Redux)
+      const diasLaboralesAnteriores = this.obtenerDiasLaboralesAnteriores();
+      console.log(
+        `📅 Días laborales anteriores: [${diasLaboralesAnteriores.join(", ")}]`
+      );
+
+      // PASO 2: Verificar si ya existe un registro mensual en IndexedDB
+      const registroMensualExistente = await this.obtenerRegistroMensual(
+        tipoPersonal,
+        modoRegistro,
+        dni,
+        mes
+      );
+
+      if (registroMensualExistente) {
+        console.log(
+          `📱 Registro mensual encontrado en IndexedDB (ID: ${registroMensualExistente.Id_Registro_Mensual})`
+        );
+
+        // PASO 3: Verificar si el registro tiene TODOS los días laborales anteriores
+        const registroCompleto = this.verificarRegistroMensualCompleto(
+          registroMensualExistente,
+          diasLaboralesAnteriores
+        );
+
+        if (registroCompleto) {
+          // ✅ CASO 1: Registro existe Y está completo
+          // → Agregar el día actual directamente SIN consultar API
+          console.log(
+            `✅ Registro completo hasta ayer, agregando día ${dia} directamente (SIN API)`
+          );
+
+          registroMensualExistente.registros[dia.toString()] = registro;
+
+          await this.guardarRegistroMensual(
+            tipoPersonal,
+            modoRegistro,
+            registroMensualExistente
+          );
+
+          console.log(
+            `✅ Asistencia marcada exitosamente (registro completo): ${rol} ${dni} - ${modoRegistro} - ${estado}`
+          );
+
+          return;
+        } else {
+          // ⚠️ CASO 2: Registro existe PERO le faltan días laborales
+          // → Consultar API para completar los días faltantes
+          console.log(
+            `⚠️ Registro existe pero faltan días laborales, consultando API para completar...`
+          );
+        }
+      } else {
+        // ❌ CASO 3: No existe registro mensual
+        // → Consultar API
+        console.log(`❌ No existe registro mensual, consultando API...`);
+      }
+
+      // PASO 4: Consultar API (para casos 2 y 3)
+      console.log(`📡 Consultando API para ${dni} - mes ${mes}...`);
+
+      const asistenciaAPI = await this.consultarAsistenciasMensualesAPI(
+        rol,
+        dni,
+        mes
+      );
+
+      if (asistenciaAPI) {
+        // ✅ CASO 4A: La API devolvió datos
+        // → Procesar, guardar todos los datos de la API, y luego agregar el día actual
+        console.log(
+          `✅ API devolvió datos para ${dni} - mes ${mes}, procesando todos los datos...`
+        );
+
+        await this.procesarYGuardarAsistenciaDesdeAPI(
+          asistenciaAPI,
+          modoRegistro
+        );
+
+        // Obtener el registro recién guardado/actualizado y agregar el día actual
+        const idRegistroAPI =
+          modoRegistro === ModoRegistro.Entrada
+            ? asistenciaAPI.Id_Registro_Mensual_Entrada
+            : asistenciaAPI.Id_Registro_Mensual_Salida;
+
+        await this.actualizarRegistroExistente(
+          tipoPersonal,
+          modoRegistro,
+          dni,
+          mes,
+          dia,
+          registro,
+          idRegistroAPI
+        );
+
+        console.log(
+          `✅ Asistencia marcada con datos actualizados de API: ${rol} ${dni} - ${modoRegistro} - ${estado}`
+        );
+      } else {
+        // ✅ CASO 4B: La API no devolvió datos (primer registro del mes o datos aún en Redis)
+        // → Usar el registro existente o crear uno nuevo
+        if (registroMensualExistente) {
+          // Actualizar el registro existente (aunque esté incompleto)
+          console.log(
+            `📝 API no devolvió datos, actualizando registro existente para ${dni} - mes ${mes}`
+          );
+
+          registroMensualExistente.registros[dia.toString()] = registro;
+
+          await this.guardarRegistroMensual(
+            tipoPersonal,
+            modoRegistro,
+            registroMensualExistente
+          );
+        } else {
+          // Crear un nuevo registro mensual temporal
+          console.log(
+            `📝 API no devolvió datos, creando nuevo registro temporal para ${dni} - mes ${mes}`
+          );
+
+          const nuevoRegistroMensual: AsistenciaMensualPersonal = {
+            Id_Registro_Mensual: 0, // ID temporal hasta que se sincronice con PostgreSQL
+            mes: mes as Meses,
+            Dni_Personal: dni,
+            registros: {
+              [dia.toString()]: registro,
+            },
+          };
+
+          await this.guardarRegistroMensual(
+            tipoPersonal,
+            modoRegistro,
+            nuevoRegistroMensual
+          );
+        }
+
+        console.log(
+          `✅ Asistencia marcada en registro local: ${rol} ${dni} - ${modoRegistro} - ${estado}`
+        );
+      }
+    } catch (error) {
+      console.error(`❌ Error al marcar asistencia:`, error);
+
+      this.handleError(error, "marcarAsistencia", {
+        modo: datos.ModoRegistro,
+        dni: datos.DNI,
+        rol: datos.Rol,
+        dia: datos.Dia,
+      });
+
+      throw error;
+    }
+  }
+
+  /**
+   * Sincroniza las asistencias registradas en Redis con la base de datos local IndexedDB
+   */
+  public async sincronizarAsistenciasDesdeRedis(
+    datosRedis: ConsultarAsistenciasTomadasPorActorEnRedisResponseBody
+  ): Promise<{
+    totalRegistros: number;
+    registrosNuevos: number;
+    registrosExistentes: number;
+    errores: number;
+  }> {
+    const stats = {
+      totalRegistros: (datosRedis.Resultados as AsistenciaDiariaResultado[])
+        .length,
+      registrosNuevos: 0,
+      registrosExistentes: 0,
+      errores: 0,
+    };
+
+    try {
+      const tipoPersonal = this.obtenerTipoPersonalDesdeRolOActor(
+        datosRedis.Actor
+      );
+
+      const mesActual = datosRedis.Mes;
+      const diaActual = datosRedis.Dia;
+
+      if (diaActual === 0) {
+        console.error(
+          "No se pudo determinar el día desde los resultados de Redis"
+        );
+        return {
+          ...stats,
+          errores: stats.totalRegistros,
+        };
+      }
+
+      for (const resultado of datosRedis.Resultados as AsistenciaDiariaResultado[]) {
+        try {
+          const registroExistente = await this.verificarSiExisteRegistroDiario(
+            tipoPersonal,
+            datosRedis.ModoRegistro,
+            resultado.DNI,
+            mesActual,
+            diaActual
+          );
+
+          if (registroExistente) {
+            stats.registrosExistentes++;
+            continue;
+          }
+
+          const registro: RegistroAsistenciaUnitariaPersonal = {
+            ModoRegistro: datosRedis.ModoRegistro,
+            DNI: resultado.DNI,
+            Rol: datosRedis.Actor,
+            Dia: diaActual,
+            Detalles: resultado.Detalles && {
+              Timestamp: (
+                resultado.Detalles as DetallesAsistenciaUnitariaPersonal
+              ).Timestamp,
+              DesfaseSegundos: (
+                resultado.Detalles as DetallesAsistenciaUnitariaPersonal
+              ).DesfaseSegundos,
+            },
+            esNuevoRegistro: true,
+          };
+
+          await this.marcarAsistencia({
+            datos: registro,
+          });
+
+          stats.registrosNuevos++;
+        } catch (error) {
+          console.error(
+            `Error al sincronizar registro para DNI ${resultado.DNI}:`,
+            error
+          );
+          stats.errores++;
+        }
+      }
+
+      return stats;
+    } catch (error) {
+      this.handleError(error, "sincronizarAsistenciasDesdeRedis", {
+        actor: datosRedis.Actor,
+        modoRegistro: datosRedis.ModoRegistro,
+        mes: datosRedis.Mes,
+        totalRegistros: (datosRedis.Resultados as AsistenciaDiariaResultado[])
+          .length,
+      });
+
+      return {
+        ...stats,
+        errores: stats.totalRegistros,
+      };
+    }
+  }
+
+  /**
+   * Verifica si ya existe un registro diario para un personal específico
+   */
+  private async verificarSiExisteRegistroDiario(
+    tipoPersonal: TipoPersonal,
+    modoRegistro: ModoRegistro,
+    dni: string,
+    mes: number,
+    dia: number
+  ): Promise<boolean> {
+    try {
       await IndexedDBConnection.init();
-
-      // Obtener el nombre del store correspondiente
       const storeName = this.getStoreName(tipoPersonal, modoRegistro);
-
-      // Obtener el store
       const store = await IndexedDBConnection.getStore(storeName, "readonly");
-
-      // Obtener el campo de ID personal
-      const idField = this.getIdFieldForStore(tipoPersonal, modoRegistro);
-
-      // Obtener el nombre del índice para buscar por DNI de personal
-      const indexName = this.getIndexNameForPersonal(tipoPersonal);
+      const indexName = this.getIndexNameForPersonalMes(tipoPersonal);
 
       return new Promise((resolve, reject) => {
         try {
-          // Usar el índice para obtener todos los registros del personal
           const index = store.index(indexName);
-          const request = index.getAll(Dni_Personal);
+          const keyValue = [dni, mes];
+          const request = index.get(keyValue);
 
           request.onsuccess = () => {
-            if (request.result && request.result.length > 0) {
-              // Ordenar por mes (de mayor a menor)
-              const registrosOrdenados = request.result.sort(
-                (a, b) => b.Mes - a.Mes
-              );
-
-              // Tomar el registro del mes más reciente
-              const registroMasReciente = registrosOrdenados[0];
-
-              // Obtener los datos de entrada o salida según corresponda
+            if (request.result) {
               const registrosDias =
                 modoRegistro === ModoRegistro.Entrada
-                  ? registroMasReciente.Entradas
-                  : registroMasReciente.Salidas;
+                  ? request.result.Entradas
+                  : request.result.Salidas;
 
-              // Si no hay registros de días, retornar null
-              if (!registrosDias || Object.keys(registrosDias).length === 0) {
-                resolve(null);
+              if (registrosDias && registrosDias[dia.toString()]) {
+                resolve(true);
                 return;
               }
-
-              // Convertir las claves (días) a números y ordenar de mayor a menor
-              const diasOrdenados = Object.keys(registrosDias)
-                .map((dia) => parseInt(dia))
-                .sort((a, b) => b - a);
-
-              // Tomar el registro del día más reciente
-              const diaUltimo = diasOrdenados[0];
-              const registroUltimo = registrosDias[diaUltimo.toString()];
-
-              // Construir y retornar el objeto con la información completa
-              resolve({
-                tipoPersonal,
-                modoRegistro,
-                Dni_Personal,
-                dia: diaUltimo,
-                mes: registroMasReciente.Mes,
-                Id_Registro_Mensual: registroMasReciente[idField],
-                registro: registroUltimo,
-              });
-            } else {
-              // No se encontraron registros
-              resolve(null);
             }
+            resolve(false);
           };
 
           request.onerror = (event) => {
             reject(
               new Error(
-                `Error al obtener registros por DNI: ${
+                `Error al verificar existencia de registro diario: ${
                   (event.target as IDBRequest).error
                 }`
               )
@@ -531,140 +1452,74 @@ export class AsistenciaDePersonalIDB {
         }
       });
     } catch (error) {
-      this.handleError(error, "obtenerUltimoRegistro", {
-        rol,
-        modoRegistro,
-        Dni_Personal,
-      });
-      throw error;
+      console.error("Error al verificar existencia de registro diario:", error);
+      return false;
     }
   }
+
   /**
-   * Actualiza un registro de asistencia específico para un día
-   * @param tipoPersonal Tipo de personal
-   * @param modoRegistro Modo de registro (Entrada o Salida)
-   * @param Dni_Personal ID del personal (DNI)
-   * @param mes Número de mes (1-12)
-   * @param dia Día del mes (1-31)
-   * @param registro Datos del registro de asistencia
-   * @param Id_Registro_Mensual ID del registro mensual proporcionado por la API
-   * @param esNuevoRegistro Indica si es un nuevo registro mensual
-   * @returns Promesa que se resuelve cuando se completa la operación
+   * Verifica si un personal ha marcado asistencia (entrada o salida) hoy
+   * USA FECHA REDUX en lugar de fecha local
    */
-  public async actualizarRegistroDiario(
-    tipoPersonal: TipoPersonal,
+  public async hasMarcadoHoy(
     modoRegistro: ModoRegistro,
-    Dni_Personal: string,
-    mes: number,
-    dia: number,
-    registro: RegistroEntradaSalida,
-    Id_Registro_Mensual: number,
-    esNuevoRegistro: boolean
-  ): Promise<void> {
+    rol: RolesSistema,
+    dni: string
+  ): Promise<{
+    marcado: boolean;
+    timestamp?: number;
+    desfaseSegundos?: number;
+    estado?: string;
+  }> {
     try {
-      // Obtener el registro mensual actual si no es nuevo registro
-      let registroMensual: AsistenciaMensualPersonal | null = null;
-
-      if (!esNuevoRegistro) {
-        registroMensual = await this.obtenerRegistroMensual(
-          tipoPersonal,
-          modoRegistro,
-          Dni_Personal,
-          mes,
-          Id_Registro_Mensual
-        );
+      // ✅ USAR FECHA REDUX
+      const fechaActualRedux = this.obtenerFechaActualDesdeRedux();
+      if (!fechaActualRedux) {
+        console.error("No se pudo obtener la fecha desde Redux");
+        return { marcado: false };
       }
 
-      // Si no existe o es nuevo registro, crear uno nuevo
-      if (!registroMensual || esNuevoRegistro) {
-        const nuevoRegistroMensual: AsistenciaMensualPersonal = {
-          Id_Registro_Mensual,
-          mes,
-          Dni_Personal,
-          registros: {
-            [dia.toString()]: registro,
-          },
-        };
+      const tipoPersonal = this.obtenerTipoPersonalDesdeRolOActor(rol);
+      const mes = fechaActualRedux.getMonth() + 1;
+      const dia = fechaActualRedux.getDate();
 
-        await this.guardarRegistroMensual(
-          tipoPersonal,
-          modoRegistro,
-          nuevoRegistroMensual
-        );
-      } else {
-        // Actualizar el registro específico del día
-        registroMensual.registros[dia.toString()] = registro;
-
-        // Guardar el registro mensual actualizado
-        await this.guardarRegistroMensual(
-          tipoPersonal,
-          modoRegistro,
-          registroMensual
-        );
-      }
-    } catch (error) {
-      this.handleError(error, "actualizarRegistroDiario", {
+      const haRegistrado = await this.verificarSiExisteRegistroDiario(
         tipoPersonal,
         modoRegistro,
-        Dni_Personal,
+        dni,
         mes,
-        dia,
-        estado: registro.estado,
-        Id_Registro_Mensual,
-      });
-      throw error;
-    }
-  }
-  /**
-   * Obtiene el registro de asistencia para un día específico
-   * @param tipoPersonal Tipo de personal
-   * @param ModoRegistro Tipo de registro (entrada o salida)
-   * @param Dni_Personal ID del personal (DNI)
-   * @param mes Número de mes (1-12)
-   * @param dia Día del mes (1-31)
-   * @returns Promesa que resuelve al registro diario o null si no existe
-   */
-  public async obtenerRegistroDiario(
-    tipoPersonal: TipoPersonal,
-    ModoRegistro: ModoRegistro,
-    Dni_Personal: string,
-    mes: number,
-    dia: number
-  ): Promise<RegistroEntradaSalida | null> {
-    try {
-      // Obtener el registro mensual
-      const registroMensual = await this.obtenerRegistroMensual(
-        tipoPersonal,
-        ModoRegistro,
-        Dni_Personal,
-        mes
+        dia
       );
 
-      // Si no existe registro mensual o no hay registro para el día, devolver null
-      if (!registroMensual || !registroMensual.registros[dia.toString()]) {
-        return null;
+      if (haRegistrado) {
+        // Obtener los detalles del registro
+        const registroMensual = await this.obtenerRegistroMensual(
+          tipoPersonal,
+          modoRegistro,
+          dni,
+          mes
+        );
+
+        if (registroMensual && registroMensual.registros[dia.toString()]) {
+          const registroDia = registroMensual.registros[dia.toString()];
+          return {
+            marcado: true,
+            timestamp: registroDia.timestamp,
+            desfaseSegundos: registroDia.desfaseSegundos,
+            estado: registroDia.estado,
+          };
+        }
       }
 
-      // Devolver el registro para el día específico
-      return registroMensual.registros[dia.toString()];
+      return { marcado: false };
     } catch (error) {
-      this.handleError(error, "obtenerRegistroDiario", {
-        tipoPersonal,
-        ModoRegistro,
-        Dni_Personal,
-        mes,
-        dia,
-      });
-      throw error;
+      console.error("Error al verificar si ha marcado hoy:", error);
+      return { marcado: false };
     }
   }
 
   /**
    * Obtiene todos los registros mensuales para un tipo de personal y un mes específico
-   * @param tipoPersonal Tipo de personal
-   * @param modoRegistro Tipo de registro (entrada o salida)
-   * @param mes Número de mes (1-12)
-   * @returns Promesa que resuelve a un arreglo de registros mensuales
    */
   public async obtenerTodosRegistrosMensuales(
     tipoPersonal: TipoPersonal,
@@ -672,39 +1527,29 @@ export class AsistenciaDePersonalIDB {
     mes: Meses
   ): Promise<AsistenciaMensualPersonal[]> {
     try {
-      // Inicializar la conexión
       await IndexedDBConnection.init();
-
-      // Obtener el nombre del store correspondiente
       const storeName = this.getStoreName(tipoPersonal, modoRegistro);
-
-      // Obtener el store
       const store = await IndexedDBConnection.getStore(storeName, "readonly");
-
-      // Obtener el campo de ID correspondiente
       const idFieldName = this.getIdFieldName(tipoPersonal);
+      const idField = this.getIdFieldForStore(tipoPersonal, modoRegistro);
 
       return new Promise((resolve, reject) => {
         try {
-          // Usamos el índice para buscar por mes
           const index = store.index("por_mes");
           const request = index.getAll(mes);
 
           request.onsuccess = () => {
             if (request.result && request.result.length > 0) {
-              // Transformar los resultados a nuestro formato de interfaz
               const registrosMensuales: AsistenciaMensualPersonal[] =
-                request.result.map(
-                  (item) =>
-                    ({
-                      mes: item.Mes,
-                      Dni_Personal: item[idFieldName],
-                      registros:
-                        modoRegistro === ModoRegistro.Entrada
-                          ? item.Entradas
-                          : item.Salidas,
-                    } as AsistenciaMensualPersonal)
-                );
+                request.result.map((item) => ({
+                  Id_Registro_Mensual: item[idField], // Corregido: usar el valor real del campo ID
+                  mes: item.Mes,
+                  Dni_Personal: item[idFieldName],
+                  registros:
+                    modoRegistro === ModoRegistro.Entrada
+                      ? item.Entradas
+                      : item.Salidas,
+                }));
 
               resolve(registrosMensuales);
             } else {
@@ -728,7 +1573,7 @@ export class AsistenciaDePersonalIDB {
     } catch (error) {
       this.handleError(error, "obtenerTodosRegistrosMensuales", {
         tipoPersonal,
-        ModoRegistro,
+        modoRegistro,
         mes,
       });
       throw error;
@@ -736,1231 +1581,369 @@ export class AsistenciaDePersonalIDB {
   }
 
   /**
-   * Elimina un registro mensual completo
-   * @param tipoPersonal Tipo de personal
-   * @param ModoRegistro Tipo de registro (entrada o salida)
-   * @param Dni_Personal ID del personal (DNI)
-   * @param mes Número de mes (1-12)
-   * @returns Promesa que se resuelve cuando se completa la operación
+   * Maneja los errores de operaciones con IndexedDB adaptado al patrón actual
    */
-  public async eliminarRegistroMensual(
-    tipoPersonal: TipoPersonal,
-    ModoRegistro: ModoRegistro,
-    Dni_Personal: string,
-    mes: number
-  ): Promise<void> {
+  private handleIndexedDBError(error: unknown, operacion: string): void {
+    console.error(`Error en operación IndexedDB (${operacion}):`, error);
+
+    let errorType: AllErrorTypes = SystemErrorTypes.UNKNOWN_ERROR;
+    let message = `Error al ${operacion}`;
+
+    if (error instanceof Error) {
+      if (error.name === "ConstraintError") {
+        errorType = DataConflictErrorTypes.VALUE_ALREADY_IN_USE;
+        message = `Error de restricción al ${operacion}: valor duplicado`;
+      } else if (error.name === "NotFoundError") {
+        errorType = UserErrorTypes.USER_NOT_FOUND;
+        message = `No se encontró el recurso al ${operacion}`;
+      } else if (error.name === "QuotaExceededError") {
+        errorType = SystemErrorTypes.DATABASE_ERROR;
+        message = `Almacenamiento excedido al ${operacion}`;
+      } else if (error.name === "TransactionInactiveError") {
+        errorType = SystemErrorTypes.DATABASE_ERROR;
+        message = `Transacción inactiva al ${operacion}`;
+      } else {
+        message = error.message || message;
+      }
+    }
+
+    this.setError({
+      success: false,
+      message: message,
+      errorType: errorType,
+    });
+  }
+
+  /**
+   * Eliminar asistencia tanto de IndexedDB como de Redis
+   * USA FECHA REDUX para determinar día/mes por defecto
+   */
+  public async eliminarAsistencia({
+    dni,
+    rol,
+    modoRegistro,
+    dia,
+    mes,
+  }: {
+    dni: string;
+    rol: RolesSistema;
+    modoRegistro: ModoRegistro;
+    dia?: number;
+    mes?: number;
+    siasisAPI?: "API01" | "API02";
+  }): Promise<{
+    exitoso: boolean;
+    mensaje: string;
+    eliminadoLocal: boolean;
+    eliminadoRedis: boolean;
+  }> {
     try {
-      // Inicializar la conexión
-      await IndexedDBConnection.init();
+      this.setIsSomethingLoading(true);
+      this.setError(null);
 
-      // Obtener el nombre del store correspondiente
-      const storeName = this.getStoreName(tipoPersonal, ModoRegistro);
+      // ✅ USAR FECHA REDUX si no se proporcionan día/mes
+      const fechaActualRedux = this.obtenerFechaActualDesdeRedux();
+      if (!fechaActualRedux && (!dia || !mes)) {
+        throw new Error(
+          "No se pudo obtener la fecha desde Redux y no se proporcionaron día/mes"
+        );
+      }
 
-      // Obtener el store
-      const store = await IndexedDBConnection.getStore(storeName, "readwrite");
+      const diaActual = dia || fechaActualRedux!.getDate();
+      const mesActual = mes || fechaActualRedux!.getMonth() + 1;
 
-      // Construir el índice y la clave compuesta
-      const indexName =
-        tipoPersonal === TipoPersonal.PROFESOR_PRIMARIA ||
-        tipoPersonal === TipoPersonal.PROFESOR_SECUNDARIA
-          ? "por_profesor_mes"
-          : tipoPersonal === TipoPersonal.AUXILIAR
-          ? "por_auxiliar_mes"
-          : "por_administrativo_mes";
+      console.log(
+        `🗑️ Iniciando eliminación de asistencia para DNI: ${dni}, Rol: ${rol}, Modo: ${modoRegistro}, Día: ${diaActual}, Mes: ${mesActual}`
+      );
 
-      return new Promise((resolve, reject) => {
-        try {
-          // Primero obtenemos el registro para conseguir su clave primaria
-          const index = store.index(indexName);
-          const keyValue = [Dni_Personal, mes];
-          const getRequest = index.get(keyValue);
+      let eliminadoLocal = false;
+      let eliminadoRedis = false;
 
-          getRequest.onsuccess = () => {
-            if (getRequest.result) {
-              // Obtenemos el ID único para eliminar el registro
-              const id =
-                getRequest.result.Id_C_E_M_P_Profesores_Primaria ||
-                getRequest.result.Id_C_E_M_P_Profesores_Secundaria ||
-                getRequest.result.Id_C_E_M_P_Auxiliar ||
-                getRequest.result.Id_C_E_M_P_Administrativo;
+      try {
+        // PASO 1: Eliminar de IndexedDB local
+        eliminadoLocal = await this.eliminarAsistenciaLocal(
+          rol,
+          dni,
+          modoRegistro,
+          diaActual,
+          mesActual
+        );
+        console.log(
+          `📱 Eliminación local: ${
+            eliminadoLocal ? "exitosa" : "no encontrada"
+          }`
+        );
+      } catch (error) {
+        console.error("Error al eliminar de IndexedDB:", error);
+        // Continuamos con Redis aunque falle local
+      }
 
-              // Eliminamos el registro usando su clave primaria
-              const deleteRequest = store.delete(id);
+      try {
+        // PASO 2: Eliminar de Redis mediante API
+        eliminadoRedis = await this.eliminarAsistenciaRedis(
+          dni,
+          rol,
+          modoRegistro
+        );
+        console.log(
+          `☁️ Eliminación Redis: ${
+            eliminadoRedis ? "exitosa" : "no encontrada"
+          }`
+        );
+      } catch (error) {
+        console.error("Error al eliminar de Redis:", error);
+        // Si ya eliminamos de local pero Redis falla, seguimos considerándolo parcialmente exitoso
+      }
 
-              deleteRequest.onsuccess = () => {
-                resolve();
-              };
+      // Determinar el resultado general
+      const exitoso = eliminadoLocal || eliminadoRedis;
+      let mensaje = "";
 
-              deleteRequest.onerror = (event) => {
-                reject(
-                  new Error(
-                    `Error al eliminar registro mensual: ${
-                      (event.target as IDBRequest).error
-                    }`
-                  )
-                );
-              };
-            } else {
-              // Si no existe, consideramos que ya está eliminado
-              resolve();
-            }
-          };
+      if (eliminadoLocal && eliminadoRedis) {
+        mensaje = "Asistencia eliminada completamente del sistema";
+      } else if (eliminadoLocal && !eliminadoRedis) {
+        mensaje = "Asistencia eliminada localmente, Redis no disponible";
+      } else if (!eliminadoLocal && eliminadoRedis) {
+        mensaje = "Asistencia eliminada de Redis, no encontrada localmente";
+      } else {
+        mensaje = "No se encontró la asistencia en ningún sistema";
+      }
 
-          getRequest.onerror = (event) => {
-            reject(
-              new Error(
-                `Error al buscar registro para eliminar: ${
-                  (event.target as IDBRequest).error
-                }`
-              )
-            );
-          };
-        } catch (error) {
-          reject(error);
-        }
-      });
+      if (exitoso && this.setSuccessMessage) {
+        this.setSuccessMessage({ message: mensaje });
+      }
+
+      return {
+        exitoso,
+        mensaje,
+        eliminadoLocal,
+        eliminadoRedis,
+      };
     } catch (error) {
-      this.handleError(error, "eliminarRegistroMensual", {
-        tipoPersonal,
-        ModoRegistro,
-        Dni_Personal,
-        mes,
+      console.error("Error general al eliminar asistencia:", error);
+
+      const errorMessage =
+        error instanceof Error
+          ? error.message
+          : "Error desconocido al eliminar asistencia";
+      this.setError({
+        success: false,
+        message: errorMessage,
       });
-      throw error;
+
+      return {
+        exitoso: false,
+        mensaje: errorMessage,
+        eliminadoLocal: false,
+        eliminadoRedis: false,
+      };
+    } finally {
+      this.setIsSomethingLoading(false);
     }
   }
 
   /**
-   * Elimina un registro de asistencia para un día específico
-   * @param tipoPersonal Tipo de personal
-   * @param ModoRegistro Tipo de registro (entrada o salida)
-   * @param Dni_Personal ID del personal (DNI)
-   * @param mes Número de mes (1-12)
-   * @param dia Día del mes (1-31)
-   * @returns Promesa que se resuelve cuando se completa la operación
+   * Función auxiliar para eliminar asistencia de IndexedDB local
+   * USA FECHA REDUX para determinar mes y día por defecto
    */
-  public async eliminarRegistroDiario(
-    tipoPersonal: TipoPersonal,
-    ModoRegistro: ModoRegistro,
-    Dni_Personal: string,
-    mes: number,
-    dia: number
-  ): Promise<void> {
+  private async eliminarAsistenciaLocal(
+    rol: RolesSistema,
+    dni: string,
+    modoRegistro: ModoRegistro,
+    dia?: number,
+    mes?: number
+  ): Promise<boolean> {
     try {
+      // ✅ USAR FECHA REDUX si no se proporcionan día/mes
+      const fechaActualRedux = this.obtenerFechaActualDesdeRedux();
+      if (!fechaActualRedux && (!dia || !mes)) {
+        console.error(
+          "No se pudo obtener la fecha desde Redux y no se proporcionaron día/mes"
+        );
+        return false;
+      }
+
+      const tipoPersonal = this.obtenerTipoPersonalDesdeRolOActor(rol);
+
+      const diaFinal = dia || fechaActualRedux!.getDate();
+      const mesFinal = mes || fechaActualRedux!.getMonth() + 1;
+
       // Obtener el registro mensual actual
       const registroMensual = await this.obtenerRegistroMensual(
         tipoPersonal,
-        ModoRegistro,
-        Dni_Personal,
-        mes
-      );
-
-      // Si no existe, no hay nada que eliminar
-      if (!registroMensual || !registroMensual.registros[dia.toString()]) {
-        return;
-      }
-
-      // Eliminar el registro específico del día
-      delete registroMensual.registros[dia.toString()];
-
-      // Guardar el registro mensual actualizado
-      await this.guardarRegistroMensual(
-        tipoPersonal,
-        ModoRegistro,
-        registroMensual
-      );
-    } catch (error) {
-      this.handleError(error, "eliminarRegistroDiario", {
-        tipoPersonal,
-        ModoRegistro,
-        Dni_Personal,
-        mes,
-        dia,
-      });
-      throw error;
-    }
-  }
-
-  /**
-   * Sincroniza los registros mensuales desde el servidor
-   * @param tipoPersonal Tipo de personal
-   * @param modoRegistro Tipo de registro (entrada o salida)
-   * @param datos Array de registros mensuales para sincronizar
-   * @returns Promesa que se resuelve cuando se completa la operación
-   */
-  public async sincronizarRegistrosMensuales(
-    tipoPersonal: TipoPersonal,
-    modoRegistro: ModoRegistro,
-    datos: AsistenciaMensualPersonal[]
-  ): Promise<void> {
-    try {
-      // Inicializar la conexión
-      await IndexedDBConnection.init();
-
-      // Obtener el nombre del store correspondiente
-      const storeName = this.getStoreName(tipoPersonal, modoRegistro);
-
-      // Obtener el store
-      const store = await IndexedDBConnection.getStore(storeName, "readwrite");
-
-      // Obtener el campo de ID correspondiente
-      const idFieldName = this.getIdFieldName(tipoPersonal);
-
-      // Procesamos todos los registros en una única transacción
-      const transaction = store.transaction;
-
-      return new Promise((resolve, reject) => {
-        try {
-          if (datos.length === 0) {
-            resolve();
-            return;
-          }
-
-          // Usamos transaction.oncomplete para asegurarnos de que todas las operaciones se completen
-          transaction.oncomplete = () => {
-            resolve();
-          };
-
-          transaction.onerror = (event) => {
-            reject(
-              new Error(
-                `Error en transacción de sincronización: ${
-                  (event.target as IDBTransaction).error
-                }`
-              )
-            );
-          };
-
-          // Procesamos cada registro
-          datos.forEach((item) => {
-            try {
-              // Preparar datos en el formato esperado por el store
-              const registroToSave: any = {
-                Mes: item.mes,
-                [idFieldName]: item.Dni_Personal,
-              };
-
-              // Agregar los registros de entrada o salida según corresponda
-              if (modoRegistro === ModoRegistro.Entrada) {
-                registroToSave.Entradas = item.registros;
-              } else {
-                registroToSave.Salidas = item.registros;
-              }
-
-              // Añadir o actualizar el registro
-              store.put(registroToSave);
-            } catch (innerError) {
-              console.error(
-                "Error al procesar registro para sincronización:",
-                innerError
-              );
-            }
-          });
-        } catch (error) {
-          reject(error);
-        }
-      });
-    } catch (error) {
-      this.handleError(error, "sincronizarRegistrosMensuales", {
-        tipoPersonal,
-        ModoRegistro,
-        cantidadDatos: datos?.length || 0,
-      });
-      throw error;
-    }
-  }
-
-  /**
-   * Convierte un rol del sistema al tipo de personal correspondiente
-   * @param rol Rol del sistema
-   * @returns Tipo de personal correspondiente
-   * @throws Error si el rol no es compatible con los tipos de personal soportados
-   */
-  private obtenerTipoPersonalDesdeRolOActor(
-    rol: RolesSistema | ActoresSistema
-  ): TipoPersonal {
-    // Usar switch para mayor claridad y control
-    switch (rol) {
-      case RolesSistema.ProfesorPrimaria:
-        return TipoPersonal.PROFESOR_PRIMARIA;
-
-      case RolesSistema.ProfesorSecundaria:
-      case RolesSistema.Tutor:
-        return TipoPersonal.PROFESOR_SECUNDARIA; // El tutor es un profesor de secundaria
-
-      case RolesSistema.Auxiliar:
-        return TipoPersonal.AUXILIAR;
-
-      case RolesSistema.PersonalAdministrativo:
-        return TipoPersonal.PERSONAL_ADMINISTRATIVO;
-
-      case RolesSistema.Directivo:
-        throw new Error(
-          `El rol de Directivo (D) no está soportado para el registro de asistencia de personal`
-        );
-
-      case RolesSistema.Responsable:
-        throw new Error(
-          `El rol de Responsable (R) no está soportado para el registro de asistencia de personal`
-        );
-
-      default:
-        throw new Error(`Rol no válido o no soportado: ${rol}`);
-    }
-  }
-
-  /**
-   * Determina el estado de asistencia basado en el desfase de tiempo
-   * @param desfaseSegundos Desfase en segundos (positivo = tardanza, negativo = anticipado)
-   * @param modoRegistro Modo de registro (Entrada o Salida)
-   * @returns Estado de asistencia ("Puntual", "Tardanza", "Temprano", etc.)
-   */
-  private determinarEstadoAsistencia(
-    desfaseSegundos: number,
-    modoRegistro: ModoRegistro
-  ): EstadosAsistenciaDePersonal {
-    // Constantes de tiempo en segundos
-    const TOLERANCIA_TARDANZA = 5 * 60; // 5 minutos de tolerancia para tardanza
-    const TOLERANCIA_TEMPRANO = 15 * 60; // 15 minutos de tolerancia para salida anticipada
-
-    // Para registro de entrada
-    if (modoRegistro === ModoRegistro.Entrada) {
-      if (desfaseSegundos <= 0) {
-        return "Puntual";
-      } else if (desfaseSegundos <= TOLERANCIA_TARDANZA) {
-        return "Tardanza Tolerada";
-      } else {
-        return "Tardanza";
-      }
-    }
-    // Para registro de salida
-    else {
-      if (desfaseSegundos >= 0) {
-        return "Cumplido";
-      } else if (desfaseSegundos >= -TOLERANCIA_TEMPRANO) {
-        return "Salida Anticipada Tolerada";
-      } else {
-        return "Salida Anticipada";
-      }
-    }
-  }
-
-  /**
-   * Marca la asistencia de entrada o salida para un personal específico
-   * usando el índice compuesto de rol, dni, mes y modo de registro
-   * @param datos Datos del registro de asistencia
-   * @returns Promesa que se resuelve cuando se completa la operación
-   */
-  public async marcarAsistencia({
-    datos,
-  }: {
-    datos: RegistroAsistenciaUnitariaPersonal;
-  }): Promise<void> {
-    try {
-      // Extraer los datos del objeto
-      const {
-        ModoRegistro: modoRegistro,
-        DNI: dni,
-        Rol: rol,
-        Dia: dia,
-        Detalles,
-      } = datos;
-
-      // Determinar el tipo de personal según el rol
-      const tipoPersonal = this.obtenerTipoPersonalDesdeRolOActor(rol);
-
-      // Obtener fecha actual para el mes
-      const fecha = new Date(Detalles!.Timestamp);
-      const mes = fecha.getMonth() + 1; // getMonth() devuelve 0-11
-
-      // Determinar el estado basado en el desfase
-      const estado = this.determinarEstadoAsistencia(
-        Detalles!.DesfaseSegundos,
-        modoRegistro
-      );
-
-      // Crear registro de asistencia
-      const registro: RegistroEntradaSalida = {
-        timestamp: Detalles!.Timestamp,
-        estado: estado,
-        desfaseSegundos: Detalles!.DesfaseSegundos,
-      };
-
-      // Si no tenemos ID, intentamos obtenerlo del almacén
-      const idRegistroMensual = await this.obtenerIdRegistroMensual(
-        tipoPersonal,
         modoRegistro,
         dni,
-        mes
+        mesFinal
       );
 
-      if (idRegistroMensual) {
-        // Si encontramos un ID existente, lo usamos
-        await this.actualizarRegistroDiario(
+      if (!registroMensual) {
+        console.log(
+          `📱 No se encontró registro mensual local para DNI: ${dni}, mes: ${mesFinal}`
+        );
+        return false;
+      }
+
+      // Verificar si existe el día específico
+      const claveDay = diaFinal.toString();
+      if (!registroMensual.registros[claveDay]) {
+        console.log(
+          `📱 No se encontró registro para el día ${diaFinal} en el mes ${mesFinal}`
+        );
+        return false;
+      }
+
+      // Eliminar el día específico del registro
+      delete registroMensual.registros[claveDay];
+
+      // Si no quedan más días, eliminar todo el registro mensual
+      if (Object.keys(registroMensual.registros).length === 0) {
+        console.log(`📱 Eliminando registro mensual completo (sin más días)`);
+        await this.eliminarRegistroMensual(
           tipoPersonal,
           modoRegistro,
           dni,
-          mes,
-          dia,
-          registro,
-          idRegistroMensual,
-          false // No es nuevo registro
+          mesFinal
         );
       } else {
-        // Si no hay ID existente, que podemos hacer?
+        // Si quedan más días, actualizar el registro
+        console.log(
+          `📱 Actualizando registro mensual (quedan ${
+            Object.keys(registroMensual.registros).length
+          } días)`
+        );
+        await this.guardarRegistroMensual(
+          tipoPersonal,
+          modoRegistro,
+          registroMensual
+        );
       }
 
-      // Registrar en la consola
       console.log(
-        `Asistencia marcada: ${rol} ${dni} - ${modoRegistro} - ${estado}`
+        `✅ Eliminación local exitosa: DNI ${dni}, día ${diaFinal}, modo ${modoRegistro}`
       );
+      return true;
     } catch (error) {
-      this.handleError(error, "marcarAsistencia", {
-        modo: datos.ModoRegistro,
-        dni: datos.DNI,
-        rol: datos.Rol,
-        dia: datos.Dia,
-      });
+      console.error("Error al eliminar asistencia local:", error);
       throw error;
     }
   }
-
   /**
-   * Obtiene los días hábiles del mes (lunes a viernes)
-   * @param mes Número de mes (1-12)
-   * @param anio Año (por defecto, el año actual)
-   * @returns Array con los días hábiles del mes
+   * ✅ FUNCIÓN AUXILIAR: Eliminar asistencia de Redis mediante API
    */
-  private obtenerDiasHabilesMes(
-    mes: number,
-    anio: number = new Date().getFullYear()
-  ): number[] {
-    const diasHabiles: number[] = [];
-    const totalDiasEnMes = new Date(anio, mes, 0).getDate();
-
-    for (let dia = 1; dia <= totalDiasEnMes; dia++) {
-      const fecha = new Date(anio, mes - 1, dia);
-      const diaSemana = fecha.getDay(); // 0: domingo, 1: lunes, ..., 6: sábado
-
-      // Consideramos días hábiles de lunes a viernes (1-5)
-      if (diaSemana >= 1 && diaSemana <= 5) {
-        diasHabiles.push(dia);
-      }
-    }
-
-    return diasHabiles;
-  }
-
-  /**
-   * Obtiene estadísticas de asistencia para un personal en un mes específico
-   * @param tipoPersonal Tipo de personal
-   * @param Dni_Personal ID del personal (DNI)
-   * @param mes Número de mes (1-12)
-   * @returns Promesa que resuelve a las estadísticas de asistencia
-   */
-  public async obtenerEstadisticasMensuales(
-    tipoPersonal: TipoPersonal,
-    Dni_Personal: string,
-    mes: number
-  ): Promise<{
-    totalDias: number;
-    asistenciasPuntuales: number;
-    tardanzas: number;
-    faltas: number;
-    porcentajeAsistencia: number;
-  }> {
+  private async eliminarAsistenciaRedis(
+    dni: string,
+    rol: RolesSistema,
+    modoRegistro: ModoRegistro
+  ): Promise<boolean> {
     try {
-      // Obtener registros de entrada y salida
-      const registroEntrada = await this.obtenerRegistroMensual(
-        tipoPersonal,
-        ModoRegistro.Entrada,
-        Dni_Personal,
-        mes
-      );
-
-      const registroSalida = await this.obtenerRegistroMensual(
-        tipoPersonal,
-        ModoRegistro.Salida,
-        Dni_Personal,
-        mes
-      );
-
-      // Inicializar contadores
-      let totalDias = 0;
-      let asistenciasPuntuales = 0;
-      let tardanzas = 0;
-      let faltas = 0;
-
-      // Obtener días hábiles del mes (simplificado, podría mejorarse con un calendario real)
-      const diasHabilesMes = this.obtenerDiasHabilesMes(mes);
-      totalDias = diasHabilesMes.length;
-
-      // Si no hay registros, devolver estadísticas con ceros
-      if (!registroEntrada && !registroSalida) {
-        return {
-          totalDias,
-          asistenciasPuntuales: 0,
-          tardanzas: 0,
-          faltas: totalDias,
-          porcentajeAsistencia: 0,
-        };
+      // Mapear RolesSistema a ActoresSistema
+      let actor: ActoresSistema;
+      switch (rol) {
+        case RolesSistema.ProfesorPrimaria:
+          actor = ActoresSistema.ProfesorPrimaria;
+          break;
+        case RolesSistema.ProfesorSecundaria:
+        case RolesSistema.Tutor:
+          actor = ActoresSistema.ProfesorSecundaria;
+          break;
+        case RolesSistema.Auxiliar:
+          actor = ActoresSistema.Auxiliar;
+          break;
+        case RolesSistema.PersonalAdministrativo:
+          actor = ActoresSistema.PersonalAdministrativo;
+          break;
+        default:
+          throw new Error(`Rol no soportado para eliminación: ${rol}`);
       }
 
-      // Procesar registros de entrada
-      if (registroEntrada) {
-        diasHabilesMes.forEach((dia) => {
-          const registro = registroEntrada.registros[dia.toString()];
-          if (registro) {
-            if (registro.estado === "Puntual") {
-              asistenciasPuntuales++;
-            } else if (registro.estado === "Tardanza") {
-              tardanzas++;
-            } else if (registro.estado === "Falta") {
-              faltas++;
-            }
-          } else {
-            faltas++;
-          }
-        });
-      } else {
-        faltas = totalDias;
-      }
-
-      // Calcular porcentaje de asistencia
-      const porcentajeAsistencia =
-        totalDias > 0
-          ? ((asistenciasPuntuales + tardanzas) / totalDias) * 100
-          : 0;
-
-      return {
-        totalDias,
-        asistenciasPuntuales,
-        tardanzas,
-        faltas,
-        porcentajeAsistencia,
+      // Crear el request body para la API de eliminación
+      const requestBody: EliminarAsistenciaRequestBody = {
+        DNI: dni,
+        Actor: actor,
+        ModoRegistro: modoRegistro,
+        TipoAsistencia: TipoAsistencia.ParaPersonal,
       };
-    } catch (error) {
-      this.handleError(error, "obtenerEstadisticasMensuales", {
-        tipoPersonal,
-        Dni_Personal,
-        mes,
+
+      console.log(`☁️ Enviando solicitud de eliminación a Redis:`, requestBody);
+
+      // Hacer la petición a la API de eliminación
+      const response = await fetch("/api/asistencia-hoy/descartar", {
+        method: "DELETE",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(requestBody),
       });
-      throw error;
-    }
-  }
 
-  /**
-   * Verifica si un personal ha marcado asistencia de entrada hoy
-   * @param tipoPersonal Tipo de personal
-   * @param Dni_Personal ID del personal (DNI)
-   * @returns Promesa que resuelve a true si ha marcado entrada hoy
-   */
-  public async hasMarcadoEntradaHoy(
-    rol: RolesSistema,
-    Dni_Personal: string
-  ): Promise<boolean> {
-    try {
-      // Obtener fecha actual
-      const fecha = new Date();
-      const mes = fecha.getMonth() + 1; // getMonth() devuelve 0-11
-      const dia = fecha.getDate();
-
-      const tipoPersonal = this.obtenerTipoPersonalDesdeRolOActor(rol);
-
-      // Obtener registro de entrada de hoy
-      const registro = await this.obtenerRegistroDiario(
-        tipoPersonal,
-        ModoRegistro.Entrada,
-        Dni_Personal,
-        mes,
-        dia
-      );
-
-      return registro !== null;
-    } catch (error) {
-      this.handleError(error, "hasMarcadoEntradaHoy", {
-        rol,
-        Dni_Personal,
-      });
-      throw error;
-    }
-  }
-
-  /**
-   * Verifica si un personal ha marcado asistencia de salida hoy
-   * @param tipoPersonal Tipo de personal
-   * @param Dni_Personal ID del personal (DNI)
-   * @returns Promesa que resuelve a true si ha marcado salida hoy
-   */
-  public async hasMarcadoSalidaHoy(
-    tipoPersonal: TipoPersonal,
-    Dni_Personal: string
-  ): Promise<boolean> {
-    try {
-      // Obtener fecha actual
-      const fecha = new Date();
-      const mes = fecha.getMonth() + 1; // getMonth() devuelve 0-11
-      const dia = fecha.getDate();
-
-      // Obtener registro de salida de hoy
-      const registro = await this.obtenerRegistroDiario(
-        tipoPersonal,
-        ModoRegistro.Salida,
-        Dni_Personal,
-        mes,
-        dia
-      );
-
-      return registro !== null;
-    } catch (error) {
-      this.handleError(error, "hasMarcadoSalidaHoy", {
-        tipoPersonal,
-        Dni_Personal,
-      });
-      throw error;
-    }
-  }
-
-  /**
-   * Verifica si un personal ha marcado asistencia (entrada o salida) hoy
-   * @param modoRegistro Tipo de registro (entrada o salida)
-   * @param rol Rol del sistema del personal
-   * @param dni ID del personal (DNI)
-   * @returns Promesa que resuelve a un objeto con información del registro o null si no ha marcado
-   */
-  public async hasMarcadoHoy(
-    modoRegistro: ModoRegistro,
-    rol: RolesSistema,
-    dni: string
-  ): Promise<{
-    marcado: boolean;
-    timestamp?: number;
-    desfaseSegundos?: number;
-    estado?: string;
-  }> {
-    try {
-      // Intentar obtener primero desde el almacenamiento de registros actuales (más rápido)
-      const ultimoRegistro = await this.obtenerUltimoRegistro(
-        rol,
-        modoRegistro,
-        dni
-      );
-
-      // Obtener el tipo de personal según el rol
-      const tipoPersonal = this.obtenerTipoPersonalDesdeRolOActor(rol);
-
-      // Si existe un registro para hoy en el almacenamiento rápido
-      if (ultimoRegistro) {
-        const fechaRegistro = new Date(ultimoRegistro.registro.timestamp);
-        const fechaHoy = new Date();
-
-        // Verificar si el registro es de hoy
-        if (
-          fechaRegistro.getDate() === fechaHoy.getDate() &&
-          fechaRegistro.getMonth() === fechaHoy.getMonth() &&
-          fechaRegistro.getFullYear() === fechaHoy.getFullYear()
-        ) {
-          return {
-            marcado: true,
-            timestamp: ultimoRegistro.registro.timestamp,
-            desfaseSegundos: ultimoRegistro.registro.desfaseSegundos,
-            estado: ultimoRegistro.registro.estado,
-          };
+      if (!response.ok) {
+        if (response.status === 404) {
+          console.log(`☁️ Asistencia no encontrada en Redis (404)`);
+          return false;
         }
+
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(
+          `Error ${response.status}: ${
+            errorData.message || response.statusText
+          }`
+        );
       }
 
-      // Si no hay registro en el almacenamiento rápido, buscar en el almacenamiento normal
-      const fecha = new Date();
-      const mes = fecha.getMonth() + 1; // getMonth() devuelve 0-11
-      const dia = fecha.getDate();
+      const responseData = await response.json();
 
-      // Obtener registro del día actual
-      const registro = await this.obtenerRegistroDiario(
+      if (responseData.success) {
+        console.log(`✅ Eliminación Redis exitosa:`, responseData.data);
+        return responseData.data.asistenciaEliminada || false;
+      } else {
+        console.log(`❌ Eliminación Redis falló:`, responseData.message);
+        return false;
+      }
+    } catch (error) {
+      console.error("Error al eliminar de Redis:", error);
+      throw error;
+    }
+  }
+
+  /**
+   * Verifica si una asistencia existe para hoy
+   * USA FECHA REDUX en lugar de fecha local
+   */
+  public async verificarAsistenciaHoy(
+    dni: string,
+    rol: RolesSistema,
+    modoRegistro: ModoRegistro
+  ): Promise<boolean> {
+    try {
+      // ✅ USAR FECHA REDUX
+      const fechaActualRedux = this.obtenerFechaActualDesdeRedux();
+      if (!fechaActualRedux) {
+        console.error("No se pudo obtener la fecha desde Redux");
+        return false;
+      }
+
+      const mes = fechaActualRedux.getMonth() + 1;
+      const dia = fechaActualRedux.getDate();
+
+      const tipoPersonal = this.obtenerTipoPersonalDesdeRolOActor(rol);
+
+      return await this.verificarSiExisteRegistroDiario(
         tipoPersonal,
         modoRegistro,
         dni,
         mes,
         dia
       );
-
-      if (registro) {
-        return {
-          marcado: true,
-          timestamp: registro.timestamp,
-          desfaseSegundos: registro.desfaseSegundos,
-          estado: registro.estado,
-        };
-      }
-
-      // Si no se encontró registro, devolver que no ha marcado
-      return { marcado: false };
     } catch (error) {
-      console.error("Error al verificar si ha marcado hoy:", error);
-      // No hacemos logout aquí para evitar interrumpir la experiencia del usuario
-      // Simplemente devolvemos que no ha marcado
-      return { marcado: false };
-    }
-  }
-
-  /**
-   * Obtiene todas las entradas registradas por un personal en un rango de fechas
-   * @param tipoPersonal Tipo de personal
-   * @param Dni_Personal ID del personal (DNI)
-   * @param fechaInicio Fecha de inicio del rango (timestamp)
-   * @param fechaFin Fecha fin del rango (timestamp)
-   * @returns Promesa que resuelve a un objeto con las entradas agrupadas por mes
-   */
-  public async obtenerRegistrosEnRango(
-    tipoPersonal: TipoPersonal,
-    ModoRegistro: ModoRegistro,
-    Dni_Personal: string,
-    fechaInicio: number,
-    fechaFin: number
-  ): Promise<Record<string, Record<string, RegistroEntradaSalida>>> {
-    try {
-      // Convertir timestamps a objetos Date
-      const inicio = new Date(fechaInicio);
-      const fin = new Date(fechaFin);
-
-      // Obtener mes y año de inicio y fin
-      const mesInicio = inicio.getMonth() + 1;
-      const anioInicio = inicio.getFullYear();
-      const mesFin = fin.getMonth() + 1;
-      const anioFin = fin.getFullYear();
-
-      // Resultado final: {mes_año: {dia: registro}}
-      const resultado: Record<
-        string,
-        Record<string, RegistroEntradaSalida>
-      > = {};
-
-      // Iteramos por cada mes en el rango
-      let currentAnio = anioInicio;
-      let currentMes = mesInicio;
-
-      while (
-        currentAnio < anioFin ||
-        (currentAnio === anioFin && currentMes <= mesFin)
-      ) {
-        // Obtener registros del mes actual
-        const registroMensual = await this.obtenerRegistroMensual(
-          tipoPersonal,
-          ModoRegistro,
-          Dni_Personal,
-          currentMes
-        );
-
-        if (registroMensual) {
-          // Clave para el mes actual (formato "MM-YYYY")
-          const clavesMes = `${currentMes
-            .toString()
-            .padStart(2, "0")}-${currentAnio}`;
-          resultado[clavesMes] = {};
-
-          // Filtrar registros solo para los días dentro del rango
-          Object.entries(registroMensual.registros).forEach(
-            ([dia, registro]) => {
-              const diaNum = parseInt(dia);
-              const fechaRegistro = new Date(
-                currentAnio,
-                currentMes - 1,
-                diaNum
-              );
-
-              // Verificar si la fecha está dentro del rango
-              if (fechaRegistro >= inicio && fechaRegistro <= fin) {
-                resultado[clavesMes][dia] = registro;
-              }
-            }
-          );
-        }
-
-        // Avanzar al siguiente mes
-        if (currentMes === 12) {
-          currentMes = 1;
-          currentAnio++;
-        } else {
-          currentMes++;
-        }
-      }
-
-      return resultado;
-    } catch (error) {
-      this.handleError(error, "obtenerRegistrosEnRango", {
-        tipoPersonal,
-        ModoRegistro,
-        Dni_Personal,
-        fechaInicio,
-        fechaFin,
-      });
-      throw error;
-    }
-  }
-
-  /**
-   * Verifica si ya existe un registro diario para un personal específico
-   * @param tipoPersonal Tipo de personal
-   * @param modoRegistro Modo de registro (Entrada o Salida)
-   * @param dni ID del personal (DNI)
-   * @param mes Número de mes (1-12)
-   * @param dia Día del mes (1-31)
-   * @returns Promesa que resuelve a true si existe, false si no existe
-   */
-  private async verificarSiExisteRegistroDiario(
-    tipoPersonal: TipoPersonal,
-    modoRegistro: ModoRegistro,
-    dni: string,
-    mes: number,
-    dia: number
-  ): Promise<boolean> {
-    try {
-      // Inicializar la conexión
-      await IndexedDBConnection.init();
-
-      // Obtener el nombre del store correspondiente
-      const storeName = this.getStoreName(tipoPersonal, modoRegistro);
-
-      // Obtener el store
-      const store = await IndexedDBConnection.getStore(storeName, "readonly");
-
-      // Obtener el nombre del índice para buscar por DNI de personal
-      const indexName = this.getIndexNameForPersonal(tipoPersonal);
-
-      return new Promise((resolve, reject) => {
-        try {
-          // Usar el índice para obtener todos los registros del personal
-          const index = store.index(indexName);
-          const request = index.getAll(dni);
-
-          request.onsuccess = () => {
-            if (request.result && request.result.length > 0) {
-              // Buscar en los registros si existe alguno para el mes y día específicos
-              for (const registro of request.result) {
-                // Verificar si el mes coincide
-                if (registro.Mes === mes) {
-                  // Obtener los registros de entrada o salida según corresponda
-                  const registrosDias =
-                    modoRegistro === ModoRegistro.Entrada
-                      ? registro.Entradas
-                      : registro.Salidas;
-
-                  // Verificar si hay un registro para el día específico
-                  if (registrosDias && registrosDias[dia.toString()]) {
-                    resolve(true);
-                    return;
-                  }
-                }
-              }
-            }
-
-            // Si no se encontró ningún registro para el mes y día específicos
-            resolve(false);
-          };
-
-          request.onerror = (event) => {
-            reject(
-              new Error(
-                `Error al verificar existencia de registro diario: ${
-                  (event.target as IDBRequest).error
-                }`
-              )
-            );
-          };
-        } catch (error) {
-          reject(error);
-        }
-      });
-    } catch (error) {
-      console.error("Error al verificar existencia de registro diario:", error);
-      // En caso de error, asumimos que no existe para volver a intentar guardar
+      console.error("Error al verificar asistencia de hoy:", error);
       return false;
     }
   }
 
   /**
-   * Obtiene el ID del registro mensual para un personal específico si existe
-   * @param tipoPersonal Tipo de personal
-   * @param modoRegistro Modo de registro (Entrada o Salida)
-   * @param dni ID del personal (DNI)
-   * @param mes Número de mes (1-12)
-   * @returns Promesa que resuelve al ID del registro mensual o null si no existe
+   * Establece un mensaje de éxito usando el patrón actual
    */
-  private async obtenerIdRegistroMensual(
-    tipoPersonal: TipoPersonal,
-    modoRegistro: ModoRegistro,
-    dni: string,
-    mes: number
-  ): Promise<number | null> {
-    try {
-      // Inicializar la conexión
-      await IndexedDBConnection.init();
-
-      // Obtener el nombre del store correspondiente
-      const storeName = this.getStoreName(tipoPersonal, modoRegistro);
-
-      // Obtener el store
-      const store = await IndexedDBConnection.getStore(storeName, "readonly");
-
-      // Obtener el nombre del índice para buscar por DNI y mes
-      const indexName = this.getIndexNameForPersonalMes(tipoPersonal);
-
-      // Obtener el ID field correspondiente
-      const idField = this.getIdFieldForStore(tipoPersonal, modoRegistro);
-
-      return new Promise((resolve, reject) => {
-        try {
-          // Usamos el índice para buscar por la clave compuesta (DNI, mes)
-          const index = store.index(indexName);
-          const keyValue = [dni, mes];
-          const request = index.get(keyValue);
-
-          request.onsuccess = () => {
-            if (request.result) {
-              // Obtener el ID del registro mensual
-              resolve(request.result[idField]);
-            } else {
-              // No existe registro mensual
-              resolve(null);
-            }
-          };
-
-          request.onerror = (event) => {
-            reject(
-              new Error(
-                `Error al obtener ID del registro mensual: ${
-                  (event.target as IDBRequest).error
-                }`
-              )
-            );
-          };
-        } catch (error) {
-          reject(error);
-        }
-      });
-    } catch (error) {
-      console.error("Error al obtener ID del registro mensual:", error);
-      return null;
-    }
-  }
-
-  /**
-   * Sincroniza las asistencias registradas en Redis con la base de datos local IndexedDB
-   * @param datosRedis Datos de asistencia obtenidos desde Redis
-   * @returns Promesa que resuelve a un objeto con estadísticas de sincronización
-   */
-  public async sincronizarAsistenciasDesdeRedis(
-    datosRedis: ConsultarAsistenciasDiariasPorActorEnRedisResponseBody
-  ): Promise<{
-    totalRegistros: number;
-    registrosNuevos: number;
-    registrosExistentes: number;
-    errores: number;
-  }> {
-    // Estadísticas de sincronización
-    const stats = {
-      totalRegistros: datosRedis.Resultados.length,
-      registrosNuevos: 0,
-      registrosExistentes: 0,
-      errores: 0,
-    };
-
-    try {
-      // Obtener el tipo de personal según el Actor
-      const tipoPersonal = this.obtenerTipoPersonalDesdeRolOActor(
-        datosRedis.Actor
-      );
-
-      // Usar el mes que viene directamente de Redis
-      const mesActual = datosRedis.Mes;
-      const diaActual = datosRedis.Dia;
-
-      if (diaActual === 0) {
-        console.error(
-          "No se pudo determinar el día desde los resultados de Redis"
-        );
-        return {
-          ...stats,
-          errores: stats.totalRegistros, // Todos fallaron
-        };
-      }
-
-      // Procesar cada resultado de Redis
-      for (const resultado of datosRedis.Resultados) {
-        try {
-          // Verificar si el registro ya existe localmente
-          const registroExistente = await this.verificarSiExisteRegistroDiario(
-            tipoPersonal,
-            datosRedis.ModoRegistro,
-            resultado.DNI,
-            mesActual,
-            diaActual
-          );
-
-          if (registroExistente) {
-            // El registro ya existe, no es necesario guardarlo nuevamente
-            stats.registrosExistentes++;
-            continue;
-          }
-
-          // Crear un registro compatible con nuestra interfaz local
-          const registro: RegistroAsistenciaUnitariaPersonal = {
-            ModoRegistro: datosRedis.ModoRegistro,
-            DNI: resultado.DNI,
-            Rol: datosRedis.Actor,
-            Dia: diaActual,
-            Detalles: resultado.Detalles && {
-              Timestamp: (
-                resultado as { Detalles: DetallesAsistenciaUnitariaPersonal }
-              ).Detalles.Timestamp,
-              DesfaseSegundos: (
-                resultado as { Detalles: DetallesAsistenciaUnitariaPersonal }
-              ).Detalles.DesfaseSegundos,
-            },
-            esNuevoRegistro: true,
-          };
-
-          // Guardar el registro en la base de datos local
-          await this.marcarAsistencia({
-            datos: registro,
-          });
-
-          // Incrementar contador de registros nuevos
-          stats.registrosNuevos++;
-        } catch (error) {
-          console.error(
-            `Error al sincronizar registro para DNI ${resultado.DNI}:`,
-            error
-          );
-          stats.errores++;
-        }
-      }
-
-      return stats;
-    } catch (error) {
-      this.handleError(error, "sincronizarAsistenciasDesdeRedis", {
-        actor: datosRedis.Actor,
-        modoRegistro: datosRedis.ModoRegistro,
-        mes: datosRedis.Mes,
-        totalRegistros: datosRedis.Resultados.length,
-      });
-
-      // Devolver estadísticas con errores
-      return {
-        ...stats,
-        errores: stats.totalRegistros, // Todos fallaron
-      };
-    }
-  }
-
-  /**
-   * Obtiene los días con mayor índice de tardanzas en un mes
-   * @param tipoPersonal Tipo de personal
-   * @param mes Número de mes (1-12)
-   * @returns Promesa que resuelve a un mapa de días con su cantidad de tardanzas
-   */
-  public async obtenerDiasConMasTardanzas(
-    tipoPersonal: TipoPersonal,
-    mes: number
-  ): Promise<Map<number, number>> {
-    try {
-      // Obtener todos los registros de entrada del mes
-      const registros = await this.obtenerTodosRegistrosMensuales(
-        tipoPersonal,
-        ModoRegistro.Entrada,
-        mes
-      );
-
-      // Inicializar mapa de días con tardanzas
-      const diasTardanzas = new Map<number, number>();
-
-      // Procesar todos los registros
-      registros.forEach((registro) => {
-        Object.entries(registro.registros).forEach(([dia, datos]) => {
-          const diaNum = parseInt(dia);
-
-          if (datos.estado === "Tardanza") {
-            const tardanzasActuales = diasTardanzas.get(diaNum) || 0;
-            diasTardanzas.set(diaNum, tardanzasActuales + 1);
-          }
-        });
-      });
-
-      // Ordenar el mapa por cantidad de tardanzas (mayor a menor)
-      return new Map([...diasTardanzas.entries()].sort((a, b) => b[1] - a[1]));
-    } catch (error) {
-      this.handleError(error, "obtenerDiasConMasTardanzas", {
-        tipoPersonal,
-        mes,
-      });
-      throw error;
-    }
-  }
-
-  /**
-   * Realiza una copia de seguridad de todos los registros de asistencia de un tipo de personal
-   * @param tipoPersonal Tipo de personal
-   * @returns Promesa que resuelve a un objeto con todos los registros
-   */
-  public async realizarBackup(tipoPersonal: TipoPersonal): Promise<{
-    entradas: any[];
-    salidas: any[];
-  }> {
-    try {
-      // Inicializar la conexión
-      await IndexedDBConnection.init();
-
-      // Obtener los stores correspondientes
-      const storeNameEntradas = this.getStoreName(
-        tipoPersonal,
-        ModoRegistro.Entrada
-      );
-      const storeNameSalidas = this.getStoreName(
-        tipoPersonal,
-        ModoRegistro.Salida
-      );
-
-      // Obtener todos los registros
-      const storeEntradas = await IndexedDBConnection.getStore(
-        storeNameEntradas,
-        "readonly"
-      );
-      const storeSalidas = await IndexedDBConnection.getStore(
-        storeNameSalidas,
-        "readonly"
-      );
-
-      // Función para obtener todos los registros de un store
-      const obtenerTodos = (store: IDBObjectStore): Promise<any[]> => {
-        return new Promise((resolve, reject) => {
-          const request = store.getAll();
-
-          request.onsuccess = () => {
-            resolve(request.result || []);
-          };
-
-          request.onerror = (event) => {
-            reject(
-              new Error(
-                `Error al obtener registros para backup: ${
-                  (event.target as IDBRequest).error
-                }`
-              )
-            );
-          };
-        });
-      };
-
-      // Obtener todos los registros
-      const [entradas, salidas] = await Promise.all([
-        obtenerTodos(storeEntradas),
-        obtenerTodos(storeSalidas),
-      ]);
-
-      return { entradas, salidas };
-    } catch (error) {
-      this.handleError(error, "realizarBackup", { tipoPersonal });
-      throw error;
-    }
-  }
-
-  /**
-   * Restaura registros de asistencia desde una copia de seguridad
-   * @param tipoPersonal Tipo de personal
-   * @param backup Objeto con los registros de backup
-   * @returns Promesa que se resuelve cuando se completa la operación
-   */
-  public async restaurarBackup(
-    tipoPersonal: TipoPersonal,
-    backup: {
-      entradas: any[];
-      salidas: any[];
-    }
-  ): Promise<void> {
-    try {
-      // Inicializar la conexión
-      await IndexedDBConnection.init();
-
-      // Obtener los stores correspondientes
-      const storeNameEntradas = this.getStoreName(
-        tipoPersonal,
-        ModoRegistro.Entrada
-      );
-      const storeNameSalidas = this.getStoreName(
-        tipoPersonal,
-        ModoRegistro.Salida
-      );
-
-      // Obtener los stores en modo escritura
-      const storeEntradas = await IndexedDBConnection.getStore(
-        storeNameEntradas,
-        "readwrite"
-      );
-      const storeSalidas = await IndexedDBConnection.getStore(
-        storeNameSalidas,
-        "readwrite"
-      );
-
-      // Función para limpiar un store y restaurar datos
-      const limpiarYRestaurar = (
-        store: IDBObjectStore,
-        datos: any[]
-      ): Promise<void> => {
-        return new Promise((resolve, reject) => {
-          // Primero limpiar el store
-          const clearRequest = store.clear();
-
-          clearRequest.onsuccess = () => {
-            try {
-              // Luego restaurar los datos
-              const transaction = store.transaction;
-
-              transaction.oncomplete = () => {
-                resolve();
-              };
-
-              transaction.onerror = (event) => {
-                reject(
-                  new Error(
-                    `Error en transacción de restauración: ${
-                      (event.target as IDBTransaction).error
-                    }`
-                  )
-                );
-              };
-
-              // Restaurar cada registro
-              datos.forEach((item) => {
-                store.add(item);
-              });
-            } catch (innerError) {
-              reject(innerError);
-            }
-          };
-
-          clearRequest.onerror = (event) => {
-            reject(
-              new Error(
-                `Error al limpiar store para restauración: ${
-                  (event.target as IDBRequest).error
-                }`
-              )
-            );
-          };
-        });
-      };
-
-      // Restaurar entradas y salidas
-      await Promise.all([
-        limpiarYRestaurar(storeEntradas, backup.entradas),
-        limpiarYRestaurar(storeSalidas, backup.salidas),
-      ]);
-    } catch (error) {
-      this.handleError(error, "restaurarBackup", {
-        tipoPersonal,
-        cantidadEntradasBackup: backup?.entradas?.length || 0,
-        cantidadSalidasBackup: backup?.salidas?.length || 0,
-      });
-      throw error;
-    }
+  private handleSuccess(message: string): void {
+    const successResponse: MessageProperty = { message };
+    this.setSuccessMessage?.(successResponse);
   }
 }

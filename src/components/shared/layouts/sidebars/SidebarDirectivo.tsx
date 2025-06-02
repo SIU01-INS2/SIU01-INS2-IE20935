@@ -6,6 +6,7 @@ import { usePathname } from "next/navigation";
 import { useDispatch, useSelector } from "react-redux";
 import SideBarElementDirectivo from "./SideBarElementDirectivo";
 import { switchSidebarIsOpen } from "@/global/state/Flags/sidebarIsOpen";
+import { RolesSistema } from "@/interfaces/shared/RolesSistema";
 
 const SidebarDirectivo = () => {
   const dispatch = useDispatch();
@@ -28,6 +29,13 @@ const SidebarDirectivo = () => {
     (state: RootState) => state.flags.sidebarIsOpen
   );
 
+  // Filtrar módulos activos y permitidos para Directivo
+  const activeModulesForDirectivo = allSiasisModules.filter(
+    (module) => 
+      module.active && 
+      module.allowedRoles.includes(RolesSistema.Directivo)
+  );
+
   return isLoginPage ? (
     <></>
   ) : (
@@ -40,7 +48,7 @@ const SidebarDirectivo = () => {
         }}
       >
         <ul id="sidebar-ul" className="flex flex-col py-3.5">
-          {allSiasisModules.map((props, index) => {
+          {activeModulesForDirectivo.map((props, index) => {
             return <SideBarElementDirectivo key={index} {...props} />;
           })}
         </ul>

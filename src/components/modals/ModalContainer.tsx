@@ -13,7 +13,7 @@ const ModalContainer = ({
   className,
 }: ModalContainerProps) => {
   return (
-    <div
+    <dialog
       onClick={eliminateModal}
       className="fixed flex-col w-screen portrait:h-[100dvh] landscape:h-screen z-[1004] top-0 left-0 bg-[#00000060] flex items-center justify-center overflow-hidden"
     >
@@ -55,7 +55,7 @@ const ModalContainer = ({
         </button>
         <div className="pr-2">{children}</div>
       </div>
-    </div>
+    </dialog>
   );
 };
 

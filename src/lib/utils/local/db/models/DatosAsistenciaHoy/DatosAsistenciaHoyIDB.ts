@@ -63,7 +63,7 @@ export class DatosAsistenciaHoyIDB {
       mensaje: error instanceof Error ? error.message : String(error),
       timestamp: Date.now(),
       contexto: JSON.stringify(detalles || {}),
-      siasisComponent: "CLN02", // Considera externalizar o configurar esto
+      siasisComponent: "CLN01", // Considera externalizar o configurar esto
     };
 
     let logoutType: LogoutTypes;

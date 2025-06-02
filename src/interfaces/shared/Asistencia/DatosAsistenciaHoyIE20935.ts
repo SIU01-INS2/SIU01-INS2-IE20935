@@ -30,7 +30,7 @@ export type PersonalAdministrativoParaTomaDeAsistencia = Pick<
   | "Google_Drive_Foto_ID"
   | "Horario_Laboral_Entrada"
   | "Horario_Laboral_Salida"
-> & {
+> & { 
   Hora_Entrada_Dia_Actual: Date;
   Hora_Salida_Dia_Actual: Date;
 };

@@ -125,7 +125,9 @@ const SeleccionRoles = () => {
           <RolBoton
             className="hover:scale-[1.05] hover:bg-color-interfaz hover:text-white"
             onClick={() => {
-              router.push(getRandomSIU01IntanceURL() + "/login/responsable");
+              router.push(
+                getRandomSIU01IntanceURL() + "/login/personal-administrativo"
+              );
             }}
             icon={
               <PersonasGenericasIcon className=" max-lg:short-height:h-[8vh] max-sm:w-[1.65rem] sm-only:w-[1.9rem] md-only:w-[2rem] lg-only:w-[2.5rem] xl-only:w-[3rem] " />

@@ -4,7 +4,7 @@
  * @param yaEsUTC - Booleano que indica si el timestamp ya está en UTC (default: false)
  * @returns String formateado como "8:00am"
  */
-export default function formatearISOaFormato12Horas(
+export function formatearISOaFormato12Horas(
   timestamp: string,
   yaEsUTC: boolean = false
 ): string {
@@ -37,5 +37,30 @@ export default function formatearISOaFormato12Horas(
     console.log(error);
     // Error al procesar la fecha
     return "##:##";
+  }
+}
+
+// Función alternativa que incluye los segundos si son diferentes de 00
+export function convertirAFormato12Horas(
+  time24: string,
+  withSeconds: boolean = false
+): string {
+  const [hours, minutes, seconds] = time24.split(":").map(Number);
+
+  const period = hours >= 12 ? "PM" : "AM";
+
+  let hours12 = hours % 12;
+  if (hours12 === 0) {
+    hours12 = 12;
+  }
+
+  const formattedMinutes = minutes.toString().padStart(2, "0");
+  const formattedSeconds = seconds.toString().padStart(2, "0");
+
+  // Solo incluir segundos si son diferentes de 00
+  if (!withSeconds) {
+    return `${hours12}:${formattedMinutes} ${period}`;
+  } else {
+    return `${hours12}:${formattedMinutes}:${formattedSeconds} ${period}`;
   }
 }

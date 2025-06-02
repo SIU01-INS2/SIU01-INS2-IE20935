@@ -6,7 +6,6 @@ import { RootState } from "@/global/store";
 import { HandlerDirectivoAsistenciaResponse } from "@/lib/utils/local/db/models/DatosAsistenciaHoy/handlers/HandlerDirectivoAsistenciaResponse";
 
 import { alterarUTCaZonaPeruana } from "@/lib/helpers/alteradores/alterarUTCaZonaPeruana";
-import formatearISOaFormato12Horas from "@/lib/helpers/formatters/formatearISOaFormato12Horas";
 import { HORA_ACTUALIZACION_DATOS_ASISTENCIA_DIARIOS } from "@/constants/HORA_ACTUALIZACION_DATOS_ASISTENCIA_DIARIOS";
 import { tiempoRestanteHasta } from "@/lib/calc/time/tiempoRestanteHasta";
 import { DatosAsistenciaHoyIDB } from "@/lib/utils/local/db/models/DatosAsistenciaHoy/DatosAsistenciaHoyIDB";
@@ -26,9 +25,9 @@ import {
 } from "@/interfaces/shared/AsistenciaRequests";
 import { ENTORNO } from "@/constants/ENTORNO";
 import { Entorno } from "@/interfaces/shared/Entornos";
+import { formatearISOaFormato12Horas } from "@/lib/helpers/formatters/fechas-hora/formatearAFormato12Horas";
 
 const TomarAsistenciaPersonal = () => {
-
   const [
     showFullScreenModalAsistenciaPersonal,
     setShowFullScreenModalAsistenciaPersonal,
@@ -48,7 +47,7 @@ const TomarAsistenciaPersonal = () => {
     useState<EstadoTomaAsistenciaResponseBody | null>(null);
   const [modoFinDeSemana, setModoFinDeSemana] = useState(false);
 
-  const fetchDataAsistence = async () => {
+  const getDataAsistence = async () => {
     setSincronizando(true);
     setHandlerDatosAsistenciaHoyDirectivo(null);
 
@@ -75,7 +74,7 @@ const TomarAsistenciaPersonal = () => {
   useEffect(() => {
     if (!fechaHoraActual.inicializado) return;
 
-    fetchDataAsistence();
+    getDataAsistence();
   }, [fechaHoraActual.inicializado]);
 
   // Efecto para verificar si necesitamos actualizar los datos cuando cambia el día
@@ -108,7 +107,7 @@ const TomarAsistenciaPersonal = () => {
       !handlerDatosAsistenciaHoyDirectivo.esHoyDiaDeEvento()
     ) {
       console.log("Detectado cambio de día, actualizando datos...");
-      fetchDataAsistence();
+      getDataAsistence();
     }
   }, [
     haySincronizacionDatos,
@@ -122,7 +121,6 @@ const TomarAsistenciaPersonal = () => {
         await new DatosAsistenciaHoyIDB().obtenerEstadoTomaAsistencia(
           TipoAsistencia.ParaPersonal
         );
-      console.log("HOLAAA", estadoTomaAsistenciaDePersonalActual);
       setEstadoTomaAsistenciaDePersonal(estadoTomaAsistenciaDePersonalActual);
     };
     obtenerEstadoAsistencia();
@@ -277,22 +275,6 @@ const TomarAsistenciaPersonal = () => {
           fechaConclusion: eventoInfo.Fecha_Conclusion,
         };
       }
-      // Si no estamos en el rango del evento, continuamos con la verificación de fin de semana
-    }
-
-    // Si estamos en proceso de registro, permanecemos en ese estado
-    if (estadoTomaAsistenciaDePersonal?.AsistenciaIniciada) {
-      return {
-        estado: "en_proceso",
-        mensaje: "Registro en proceso",
-        descripcion: "El registro de asistencia está siendo procesado.",
-        tiempoRestante: null,
-        botonActivo: !showFullScreenModalAsistenciaPersonal,
-        colorEstado: "bg-green-100",
-        mostrarContadorPersonal: true,
-        etiquetaPersonal: "Personal pendiente",
-        iconoPersonal: "reloj",
-      };
     }
 
     // Si estamos sincronizando
@@ -340,6 +322,7 @@ const TomarAsistenciaPersonal = () => {
         mostrarContadorPersonal: false,
       };
     }
+
     // Verificamos si la fecha de datos de asistencia es de un día anterior
     const fechaActual = new Date(fechaHoraActual.fechaHora!);
     const fechaDatosAsistencia = new Date(
@@ -360,6 +343,9 @@ const TomarAsistenciaPersonal = () => {
       };
     }
 
+    // VERIFICAR HORARIOS ANTES QUE EL ESTADO DE PROCESO
+
+    // Si aún no es hora de inicio
     if (
       tiempoRestanteParaInicioAsistencia &&
       !tiempoRestanteParaInicioAsistencia.yaVencido
@@ -409,7 +395,23 @@ const TomarAsistenciaPersonal = () => {
       };
     }
 
-    // Si estamos en horario válido para tomar asistencia
+    // AHORA SÍ VERIFICAMOS EL ESTADO DE PROCESO
+    // Solo si estamos dentro del horario válido y no hay restricciones
+    if (estadoTomaAsistenciaDePersonal?.AsistenciaIniciada) {
+      return {
+        estado: "en_proceso",
+        mensaje: "Registro en proceso",
+        descripcion: "El registro de asistencia está siendo procesado.",
+        tiempoRestante: null,
+        botonActivo: !showFullScreenModalAsistenciaPersonal,
+        colorEstado: "bg-green-100",
+        mostrarContadorPersonal: true,
+        etiquetaPersonal: "Personal pendiente",
+        iconoPersonal: "reloj",
+      };
+    }
+
+    // Si estamos en horario válido para tomar asistencia (estado por defecto)
     return {
       estado: "disponible",
       mensaje: "Sistema listo para registro",
@@ -428,7 +430,6 @@ const TomarAsistenciaPersonal = () => {
       tiempoDisponible: tiempoRestanteParaCierreAsistencia.formateado,
     };
   };
-
   // Obtener el estado actual
   const estadoSistema = determinarEstadoSistema();
 

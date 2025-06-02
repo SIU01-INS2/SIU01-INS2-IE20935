@@ -1,12 +1,15 @@
 "use client";
 
-import { RootState } from "@/global/store";
+import { AppDispatch, RootState } from "@/global/store";
 import { RolesSistema } from "@/interfaces/shared/RolesSistema";
 import { useEffect, useState } from "react";
-import { useSelector } from "react-redux";
+import { useDispatch, useSelector } from "react-redux";
 import { usePathname } from "next/navigation";
 import InterceptedLinkForDataThatCouldBeLost from "../InterceptedLinkForDataThatCouldBeLost";
 import allSiasisModules from "@/Assets/routes/modules.routes";
+import { useDelegacionEventos } from "@/hooks/useDelegacionDeEventos";
+import { setNavBarFooterHeight } from "@/global/state/ElementDimensions/navBarFooterHeight";
+import { setSidebarIsOpen } from "@/global/state/Flags/sidebarIsOpen";
 
 // Estilos uniformes para todos los contenedores de navegación
 const getUniformContainerStyles = (itemsCount: number) => {
@@ -75,9 +78,9 @@ function getNavBarFooterByRol(
   Rol: RolesSistema,
   pathname: string
 ): React.ReactNode {
-  // Filtrar módulos disponibles para el rol actual
-  const availableModules = allSiasisModules.filter((module) =>
-    module.allowedRoles.includes(Rol)
+  // Filtrar módulos disponibles para el rol actual que estén activos
+  const availableModules = allSiasisModules.filter(
+    (module) => module.allowedRoles.includes(Rol) && module.active
   );
 
   if (availableModules.length === 0) {
@@ -110,6 +113,38 @@ const NavBarFooter = ({ Rol }: { Rol: RolesSistema }) => {
   const [montado, setMontado] = useState(false);
   const pathname = usePathname();
 
+  const { delegarEvento } = useDelegacionEventos();
+  const dispatch = useDispatch<AppDispatch>();
+
+  useEffect(() => {
+    if (!delegarEvento) return;
+
+    // Observer para actualizar la altura del header en el store
+    const resizeObserver = new ResizeObserver((entries) => {
+      entries.forEach((entry) => {
+        dispatch(
+          setNavBarFooterHeight({
+            value: parseFloat(getComputedStyle(entry.target).height),
+          })
+        );
+      });
+    });
+
+    // Establecer navbarfooter abierto por defecto en movil
+    if (window.innerWidth < 768) {
+      dispatch(setSidebarIsOpen({ value: true }));
+    }
+
+    const navBarFooterHTML = document.getElementById("header");
+
+    if (!navBarFooterHTML) return;
+    resizeObserver.observe(navBarFooterHTML);
+
+    return () => {
+      resizeObserver.disconnect();
+    };
+  }, [delegarEvento, dispatch]);
+
   useEffect(() => {
     setMontado(true);
   }, []);
@@ -123,8 +158,9 @@ const NavBarFooter = ({ Rol }: { Rol: RolesSistema }) => {
   }
 
   return (
-    <nav
-      className={`shadow-[0_0_12px_4px_rgba(0,0,0,0.20)] 
+    <>
+      <nav
+        className={`shadow-[0_0_12px_4px_rgba(0,0,0,0.20)] 
         animate__animated fixed
         ${
           montado && navBarFooterIsOpen
@@ -134,11 +170,12 @@ const NavBarFooter = ({ Rol }: { Rol: RolesSistema }) => {
         [animation-duration:150ms] 
         flex items-center justify-center 
         max-w-[100vw] w-full 
-         z-[1001] bottom-0 left-0
+         z-[101] bottom-0 left-0 bg-white
       `}
-    >
-      {getNavBarFooterByRol(Rol, pathname)}
-    </nav>
+      >
+        {getNavBarFooterByRol(Rol, pathname)}
+      </nav>
+    </>
   );
 };
 

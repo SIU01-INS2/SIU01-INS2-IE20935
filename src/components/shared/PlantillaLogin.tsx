@@ -19,6 +19,12 @@ import { ResponseSuccessLogin } from "@/interfaces/shared/apis/shared/login/type
 import { MisDatosErrorResponseAPI01 } from "@/interfaces/shared/apis/api01/mis-datos/types";
 import { Link } from "next-view-transitions";
 import UltimaModificacionTablasIDB from "@/lib/utils/local/db/models/UltimaModificacionTablasIDB";
+import { IndexedDBConnection } from "@/lib/utils/local/db/IndexedDBConnection";
+import { RolesSistema } from "@/interfaces/shared/RolesSistema";
+import {
+  SE_MOSTRARON_COMUNICADOS_DE_HOY_KEY,
+  SE_MOSTRARON_COMUNICADOS_DE_HOY_VALOR_INICIAL,
+} from "../modals/Comunicados/ComunicadosDeHoy";
 
 export type RolForLogin =
   | "DIRECTIVO"
@@ -27,6 +33,10 @@ export type RolForLogin =
   | "PROFESOR/TUTOR(Secundaria)"
   | "RESPONSABLE(Padre/Apoderado)"
   | "PERSONAL ADMINISTRATIVO";
+
+export const SE_MOSTRO_TOLTIP_TOMAR_ASISTENCIA_PERSONAL_KEY =
+  "toltip-tomar-asistencia-personal-SHOWED";
+export const SE_MOSTRO_TOLTIP_TOMAR_ASISTENCIA_PERSONAL_VALOR_INICIAL = "false";
 
 export interface FormularioLogin {
   Nombre_Usuario: string;
@@ -71,6 +81,7 @@ const PlantillaLogin = ({ rol, siasisAPI, endpoint }: PlantillaLoginProps) => {
       [e.target.name]: e.target.value,
     });
   };
+
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
 
@@ -110,14 +121,32 @@ const PlantillaLogin = ({ rol, siasisAPI, endpoint }: PlantillaLoginProps) => {
         throw new Error(message);
       }
 
-      //Guadando data en IndexedDB
+      // Guardar rol del usuario en la propiedad estática Y localStorage automáticamente
+      IndexedDBConnection.rol = data.Rol as RolesSistema;
+
+      // Guardando data en IndexedDB
       await userStorage.saveUserData({
         ...data,
         ultimaSincronizacionTablas: Date.now(),
       });
 
-      //Sincronizando las modificaciones de tablas
+      // Sincronizando las modificaciones de tablas
       await new UltimaModificacionTablasIDB(siasisAPI).sync(true);
+
+      //CADA VES QUE SE INICIE SESION, SE DEBE MOSTRAR LOS COMUNICADOS DEL DIA DE HOY
+      sessionStorage.setItem(
+        SE_MOSTRARON_COMUNICADOS_DE_HOY_KEY,
+        SE_MOSTRARON_COMUNICADOS_DE_HOY_VALOR_INICIAL
+      );
+
+      // SIEMPRE EN CUANDO SE TRATE DE UN PERSONAL
+      if (rol !== "DIRECTIVO" && rol !== "RESPONSABLE(Padre/Apoderado)") {
+        // GUARDANDO VARIABLE DE MUESTRA DE TOOLTIP
+        sessionStorage.setItem(
+          SE_MOSTRO_TOLTIP_TOMAR_ASISTENCIA_PERSONAL_KEY,
+          SE_MOSTRO_TOLTIP_TOMAR_ASISTENCIA_PERSONAL_VALOR_INICIAL
+        );
+      }
 
       // setTimeout(() => {
       window.location.href = "/";
@@ -211,8 +240,6 @@ const PlantillaLogin = ({ rol, siasisAPI, endpoint }: PlantillaLoginProps) => {
                   <Loader className="w-[1.5rem] bg-white p-[0.3rem]" />
                 )}
               </button>
-
-            
             </form>
           </div>
 

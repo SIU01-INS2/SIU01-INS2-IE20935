@@ -15,7 +15,7 @@ const PlantillaResponsable = ({
   Google_Drive_Foto_ID: string | null;
 }) => {
   return (
-    <>
+    <main className="w-full grid grid-rows-[min-content_1fr_min-content] min-h-[100dvh]">
       <Header
         Nombres={Nombres}
         Apellidos={Apellidos}
@@ -24,7 +24,7 @@ const PlantillaResponsable = ({
       />
       {children}
       <NavBarFooter Rol={RolesSistema.Responsable} />
-    </>
+    </main>
   );
 };
 

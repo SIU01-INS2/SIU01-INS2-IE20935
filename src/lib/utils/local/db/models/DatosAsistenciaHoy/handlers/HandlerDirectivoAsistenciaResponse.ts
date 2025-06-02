@@ -2,7 +2,6 @@ import {
   AuxiliaresParaTomaDeAsistencia,
   DirectivoAsistenciaResponse,
   HorarioTomaAsistencia,
-  PersonalAdministrativoParaTomaDeAsistencia,
   ProfesoresPrimariaParaTomaDeAsistencia,
   ProfesorTutorSecundariaParaTomaDeAsistencia,
 } from "@/interfaces/shared/Asistencia/DatosAsistenciaHoyIE20935";
@@ -13,6 +12,7 @@ import { PersonalParaTomarAsistencia } from "@/components/asistencia-personal/It
 import { ModoRegistro } from "@/interfaces/shared/ModoRegistroPersonal";
 import { ActoresSistema } from "@/interfaces/shared/ActoresSistema";
 import { RolesSistema } from "@/interfaces/shared/RolesSistema";
+import { PersonalAdministrativoParaTomaDeAsistencia } from "../../../../../../../interfaces/shared/Asistencia/DatosAsistenciaHoyIE20935";
 
 export class HandlerDirectivoAsistenciaResponse extends HandlerAsistenciaBase {
   private directivoData: DirectivoAsistenciaResponse;
@@ -221,50 +221,41 @@ export class HandlerDirectivoAsistenciaResponse extends HandlerAsistenciaBase {
    * @param rol Rol del personal
    * @param dni DNI del personal
    * @param modoRegistro Modo de registro (Entrada o Salida)
-   * @returns Hora programada para entrada o salida en formato Date
+   * @returns Hora programada para entrada o salida en formato ISO string (tal como viene del JSON)
    */
-  public obtenerHorarioPersonal(
+  public obtenerHorarioPersonalISO(
     rol: ActoresSistema | RolesSistema,
     dni: string,
     modoRegistro: ModoRegistro
-  ): Date {
-    const fechaActual = new Date();
-    let horaProgramada = new Date(fechaActual);
-
+  ): string {
     try {
       // Caso especial para estudiantes
       if (rol === ActoresSistema.Estudiante) {
-        // Para estudiantes, solo se considera la entrada y siempre es la misma hora
         if (this.directivoData.HorariosEscolares[NivelEducativo.PRIMARIA]) {
-          return new Date(
+          return String(
             this.directivoData.HorariosEscolares[NivelEducativo.PRIMARIA].Inicio
           );
         } else {
-          // Si no hay horario definido para primaria, usar un horario predeterminado
-          horaProgramada.setHours(7, 45, 0, 0);
-          return horaProgramada;
+          // Si no hay horario definido, crear uno predeterminado
+          const fechaHoy = new Date();
+          fechaHoy.setHours(7, 45, 0, 0);
+          return fechaHoy.toISOString();
         }
       }
 
       switch (rol) {
         case ActoresSistema.ProfesorPrimaria:
-          if (this.directivoData.HorariosEscolares[NivelEducativo.PRIMARIA]) {
-            const horario =
-              this.directivoData.HorariosEscolares[NivelEducativo.PRIMARIA];
+          const horarioProfesoresPrimaria =
+            this.getHorarioTomaAsistenciaPrimaria();
 
-            if (modoRegistro === ModoRegistro.Entrada) {
-              // Para entrada, usar hora de inicio
-              horaProgramada = new Date(horario.Inicio);
-            } else {
-              // Para salida, usar hora de fin
-              horaProgramada = new Date(horario.Fin);
-            }
+          if (modoRegistro === ModoRegistro.Entrada) {
+            return String(horarioProfesoresPrimaria.Inicio);
+          } else {
+            return String(horarioProfesoresPrimaria.Fin);
           }
-          break;
 
         case ActoresSistema.ProfesorSecundaria:
         case ActoresSistema.Tutor:
-          // Buscar el profesor específico
           const profesorSecundaria = this.buscarProfesorSecundariaPorDNI(dni);
 
           if (profesorSecundaria) {
@@ -272,30 +263,28 @@ export class HandlerDirectivoAsistenciaResponse extends HandlerAsistenciaBase {
               modoRegistro === ModoRegistro.Entrada &&
               profesorSecundaria.Hora_Entrada_Dia_Actual
             ) {
-              // Entrada específica del profesor
-              horaProgramada = new Date(
-                profesorSecundaria.Hora_Entrada_Dia_Actual
-              );
+              return String(profesorSecundaria.Hora_Entrada_Dia_Actual);
             } else if (
               modoRegistro === ModoRegistro.Salida &&
               profesorSecundaria.Hora_Salida_Dia_Actual
             ) {
-              // Salida específica del profesor
-              horaProgramada = new Date(
-                profesorSecundaria.Hora_Salida_Dia_Actual
-              );
-            }
-          } else if (
-            this.directivoData.HorariosEscolares[NivelEducativo.SECUNDARIA]
-          ) {
-            // Si no tiene horario específico, usar el general de secundaria
-            const horario =
-              this.directivoData.HorariosEscolares[NivelEducativo.SECUNDARIA];
-
-            if (modoRegistro === ModoRegistro.Entrada) {
-              horaProgramada = new Date(horario.Inicio);
+              return String(profesorSecundaria.Hora_Salida_Dia_Actual);
             } else {
-              horaProgramada = new Date(horario.Fin);
+              // Fallback al horario general de secundaria
+              if (
+                this.directivoData.HorariosEscolares[NivelEducativo.SECUNDARIA]
+              ) {
+                const horario =
+                  this.directivoData.HorariosEscolares[
+                    NivelEducativo.SECUNDARIA
+                  ];
+
+                if (modoRegistro === ModoRegistro.Entrada) {
+                  return String(horario.Inicio);
+                } else {
+                  return String(horario.Fin);
+                }
+              }
             }
           }
           break;
@@ -304,49 +293,93 @@ export class HandlerDirectivoAsistenciaResponse extends HandlerAsistenciaBase {
           const horarioAuxiliares = this.getHorarioTomaAsistenciaAuxiliares();
 
           if (modoRegistro === ModoRegistro.Entrada) {
-            horaProgramada = new Date(horarioAuxiliares.Inicio);
+            return String(horarioAuxiliares.Inicio);
           } else {
-            horaProgramada = new Date(horarioAuxiliares.Fin);
+            return String(horarioAuxiliares.Fin);
           }
-          break;
 
         case ActoresSistema.PersonalAdministrativo:
-          // Para personal administrativo, buscar su horario específico
           const personal = this.buscarPersonalAdministrativoPorDNI(dni);
 
           if (personal) {
             if (
               modoRegistro === ModoRegistro.Entrada &&
-              personal.Horario_Laboral_Entrada
+              personal.Hora_Entrada_Dia_Actual
             ) {
-              horaProgramada = new Date(personal.Hora_Entrada_Dia_Actual);
+              return String(personal.Hora_Entrada_Dia_Actual);
             } else if (
               modoRegistro === ModoRegistro.Salida &&
-              personal.Horario_Laboral_Salida
+              personal.Hora_Salida_Dia_Actual
             ) {
-              horaProgramada = new Date(personal.Hora_Salida_Dia_Actual);
+              return String(personal.Hora_Salida_Dia_Actual);
+            } else {
+              // Fallback al horario general
+              const horarioGeneral = this.getHorarioTomaAsistenciaGeneral();
+
+              if (modoRegistro === ModoRegistro.Entrada) {
+                return String(horarioGeneral.Inicio);
+              } else {
+                return String(horarioGeneral.Fin);
+              }
             }
           }
           break;
 
         default:
-          // Valor predeterminado
+          // Fallback usando horario general
+          const horarioGeneral = this.getHorarioTomaAsistenciaGeneral();
+
           if (modoRegistro === ModoRegistro.Entrada) {
-            horaProgramada.setHours(8, 0, 0, 0);
+            return String(horarioGeneral.Inicio);
           } else {
-            horaProgramada.setHours(16, 0, 0, 0);
+            return String(horarioGeneral.Fin);
           }
       }
     } catch (error) {
       console.error("Error al obtener horario personal:", error);
-      // En caso de cualquier error, devolver un horario predeterminado
-      if (modoRegistro === ModoRegistro.Entrada) {
-        horaProgramada.setHours(8, 0, 0, 0);
-      } else {
-        horaProgramada.setHours(16, 0, 0, 0);
-      }
     }
 
-    return horaProgramada;
+    // En caso de cualquier error, devolver un horario predeterminado
+    const fechaPredeterminada = new Date();
+    if (modoRegistro === ModoRegistro.Entrada) {
+      fechaPredeterminada.setHours(8, 0, 0, 0);
+    } else {
+      fechaPredeterminada.setHours(16, 0, 0, 0);
+    }
+    return fechaPredeterminada.toISOString();
+  }
+
+  // Método de debugging simplificado
+  public debugHorariosISO(
+    rol: ActoresSistema | RolesSistema,
+    dni?: string
+  ): void {
+    console.log("🔍 DEBUG HORARIOS ISO (SIN CONVERSIONES)");
+    console.log("==========================================");
+    console.log("Rol:", rol);
+    console.log("DNI:", dni || "N/A");
+
+    try {
+      const entradaISO = this.obtenerHorarioPersonalISO(
+        rol,
+        dni || "",
+        ModoRegistro.Entrada
+      );
+      const salidaISO = this.obtenerHorarioPersonalISO(
+        rol,
+        dni || "",
+        ModoRegistro.Salida
+      );
+
+      console.log("📅 ENTRADA ISO:", entradaISO);
+      console.log("📅 SALIDA ISO:", salidaISO);
+      console.log(
+        "✅ Estos valores se envían directamente a la API sin conversiones"
+      );
+    } catch (error) {
+      console.error("❌ ERROR en debug:", error);
+    }
+
+    console.log("==========================================");
   }
 }

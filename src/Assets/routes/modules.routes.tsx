@@ -21,6 +21,7 @@ import PizarraAula from "@/components/icons/PizarraAula";
 import PersonaLibro from "@/components/icons/PersonaLibro";
 import EstudianteBirrete from "@/components/icons/Auxiliar";
 import RelojTIempo from "@/components/icons/RelojTIempo";
+import TablaIcon from "@/components/icons/TablaIcon";
 
 export interface SiasisModule {
   etiquetaSuperior?: string;
@@ -28,6 +29,7 @@ export interface SiasisModule {
   text: string;
   IconTSX: (props: IconProps) => ReactElement;
   allowedRoles: RolesSistema[]; // Propiedad para roles permitidos
+  active: boolean;
 }
 
 const allSiasisModules: SiasisModule[] = [
@@ -38,6 +40,7 @@ const allSiasisModules: SiasisModule[] = [
       return <AulaIcon {...props} />;
     },
     allowedRoles: [RolesSistema.Directivo],
+    active: true,
   },
   {
     route: "/estudiantes",
@@ -46,6 +49,7 @@ const allSiasisModules: SiasisModule[] = [
       return <EstudianteIcon {...props} />;
     },
     allowedRoles: [RolesSistema.Directivo],
+    active: true,
   },
 
   {
@@ -55,6 +59,7 @@ const allSiasisModules: SiasisModule[] = [
       return <ResponsableIcon {...props} />;
     },
     allowedRoles: [RolesSistema.Directivo],
+    active: true,
   },
   {
     etiquetaSuperior: "Gestion de Personal",
@@ -64,6 +69,16 @@ const allSiasisModules: SiasisModule[] = [
       return <ControlAsistenciaIcon {...props} />;
     },
     allowedRoles: [RolesSistema.Directivo],
+    active: true,
+  },
+  {
+    route: "/registros-asistencia-personal",
+    text: "Registros",
+    IconTSX: (props: IconProps) => {
+      return <TablaIcon {...props} />;
+    },
+    allowedRoles: [RolesSistema.Directivo],
+    active: true,
   },
   {
     route: "/profesores",
@@ -72,6 +87,7 @@ const allSiasisModules: SiasisModule[] = [
       return <ProfesoresIcon {...props} />;
     },
     allowedRoles: [RolesSistema.Directivo],
+    active: true,
   },
   {
     route: "/auxiliares",
@@ -80,6 +96,7 @@ const allSiasisModules: SiasisModule[] = [
       return <AuxiliarIcon {...props} />;
     },
     allowedRoles: [RolesSistema.Directivo],
+    active: true,
   },
   {
     route: "/personal-administrativo",
@@ -88,7 +105,9 @@ const allSiasisModules: SiasisModule[] = [
       return <PersonasGenericasIcon {...props} />;
     },
     allowedRoles: [RolesSistema.Directivo],
+    active: true,
   },
+
   {
     etiquetaSuperior: "Asistencias Escolares",
     route: "/registros-asistencias-escolares",
@@ -97,6 +116,7 @@ const allSiasisModules: SiasisModule[] = [
       return <RegistrosIcon {...props} />;
     },
     allowedRoles: [RolesSistema.Directivo],
+    active: true,
   },
   {
     route: "/reportes-asistencias-escolares",
@@ -105,6 +125,7 @@ const allSiasisModules: SiasisModule[] = [
       return <ReportesIcon {...props} />;
     },
     allowedRoles: [RolesSistema.Directivo],
+    active: true,
   },
   {
     route: "/rankings-asistencias-escolares",
@@ -113,6 +134,7 @@ const allSiasisModules: SiasisModule[] = [
       return <RankingsIcon {...props} />;
     },
     allowedRoles: [RolesSistema.Directivo],
+    active: true,
   },
   {
     etiquetaSuperior: " ",
@@ -122,6 +144,7 @@ const allSiasisModules: SiasisModule[] = [
       return <ProgramacionIcon {...props} />;
     },
     allowedRoles: [RolesSistema.Directivo],
+    active: true,
   },
   {
     route: "/eventos",
@@ -130,6 +153,7 @@ const allSiasisModules: SiasisModule[] = [
       return <EventosIcon {...props} />;
     },
     allowedRoles: [RolesSistema.Directivo],
+    active: true,
   },
   {
     route: "/comunicados",
@@ -138,6 +162,7 @@ const allSiasisModules: SiasisModule[] = [
       return <ComunicadosIcon {...props} />;
     },
     allowedRoles: [RolesSistema.Directivo],
+    active: true,
   },
   {
     route: "/configuraciones",
@@ -146,6 +171,7 @@ const allSiasisModules: SiasisModule[] = [
       return <ConfiguracionesIcon {...props} />;
     },
     allowedRoles: [RolesSistema.Directivo],
+    active: true,
   },
   {
     route: "/tomar-asistencia-primaria",
@@ -154,6 +180,7 @@ const allSiasisModules: SiasisModule[] = [
       return <LibretaConLapiz {...props} />;
     },
     allowedRoles: [RolesSistema.ProfesorPrimaria],
+    active: true,
   },
   {
     route: "/mi-aula",
@@ -162,6 +189,7 @@ const allSiasisModules: SiasisModule[] = [
       return <PizarraAula {...props} />;
     },
     allowedRoles: [RolesSistema.ProfesorPrimaria],
+    active: true,
   },
   {
     route: "/tomar-asistencia-secundaria",
@@ -170,6 +198,7 @@ const allSiasisModules: SiasisModule[] = [
       return <LibretaConLapiz {...props} />;
     },
     allowedRoles: [RolesSistema.Auxiliar],
+    active: true,
   },
   {
     route: "/asistencias-escolares-secundaria",
@@ -178,6 +207,7 @@ const allSiasisModules: SiasisModule[] = [
       return <EstudianteBirrete {...props} />;
     },
     allowedRoles: [RolesSistema.Auxiliar],
+    active: true,
   },
   {
     route: "/aula-a-cargo",
@@ -186,6 +216,7 @@ const allSiasisModules: SiasisModule[] = [
       return <PizarraAula {...props} />;
     },
     allowedRoles: [RolesSistema.Tutor],
+    active: true,
   },
   {
     route: "/mi-horario",
@@ -194,6 +225,7 @@ const allSiasisModules: SiasisModule[] = [
       return <RelojTIempo {...props} />;
     },
     allowedRoles: [RolesSistema.ProfesorSecundaria, RolesSistema.Tutor],
+    active: true,
   },
 
   {
@@ -209,6 +241,7 @@ const allSiasisModules: SiasisModule[] = [
       RolesSistema.Tutor,
       RolesSistema.PersonalAdministrativo,
     ],
+    active: true,
   },
   {
     route: "/estudiantes-vinculados",
@@ -217,6 +250,7 @@ const allSiasisModules: SiasisModule[] = [
       return <EstudianteBirrete {...props} />;
     },
     allowedRoles: [RolesSistema.Responsable],
+    active: true,
   },
 ];
 

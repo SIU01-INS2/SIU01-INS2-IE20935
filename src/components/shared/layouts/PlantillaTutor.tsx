@@ -3,6 +3,7 @@ import React from "react";
 import Header from "./Header";
 import { RolesSistema } from "@/interfaces/shared/RolesSistema";
 import NavBarFooter from "./NavBarFooter";
+import MarcarAsistenciaDePersonalButton from "../buttons/MarcarAsistenciaDePersonalButton";
 
 const PlantillaTutor = ({
   children,
@@ -18,7 +19,7 @@ const PlantillaTutor = ({
   Google_Drive_Foto_ID: string | null;
 }) => {
   return (
-    <>
+    <main className="w-full grid grid-rows-[min-content_1fr_min-content] min-h-[100dvh]">
       <Header
         Genero={Genero}
         Google_Drive_Foto_ID={Google_Drive_Foto_ID}
@@ -27,9 +28,9 @@ const PlantillaTutor = ({
         Rol={RolesSistema.Tutor}
       />
       {children}
-
-      <NavBarFooter Rol={RolesSistema.Tutor}/>
-    </>
+      <MarcarAsistenciaDePersonalButton />
+      <NavBarFooter Rol={RolesSistema.Tutor} />
+    </main>
   );
 };
 
