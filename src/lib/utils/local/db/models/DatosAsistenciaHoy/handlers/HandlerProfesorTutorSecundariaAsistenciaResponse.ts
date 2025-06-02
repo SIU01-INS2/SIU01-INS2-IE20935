@@ -12,7 +12,7 @@ export class HandlerProfesorTutorSecundariaAsistenciaResponse extends HandlerAsi
     this.profesorSecundariaData = asistenciaData;
   }
 
-  public getHorarioProfesor():
+  public getMiHorarioTomaAsistencia():
     | { Hora_Entrada_Dia_Actual: Date; Hora_Salida_Dia_Actual: Date }
     | false
     | undefined {
@@ -36,8 +36,8 @@ export class HandlerProfesorTutorSecundariaAsistenciaResponse extends HandlerAsi
     return ahora >= inicio && ahora <= fin;
   }
 
-  public estaActivoHorarioProfesor(): boolean {
-    const horario = this.getHorarioProfesor();
+  public estaActivoMiHorario(): boolean {
+    const horario = this.getMiHorarioTomaAsistencia();
     if (
       !horario ||
       typeof horario === "boolean" ||

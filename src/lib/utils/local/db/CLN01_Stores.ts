@@ -628,4 +628,65 @@ export const CLN01_Stores = {
       },
     ],
   },
+  // ✅ NUEVA TABLA: Cache de asistencias consultadas desde Redis
+  asistencias_tomadas_hoy: {
+    keyPath: "clave", // La clave será el identificador único (fecha:modo:actor:dni)
+    autoIncrement: false,
+    indexes: [
+      // Índice por DNI para consultas rápidas por usuario
+      {
+        name: "por_dni",
+        keyPath: "dni",
+        options: { unique: false },
+      },
+      // Índice por fecha para limpiezas por día
+      {
+        name: "por_fecha",
+        keyPath: "fecha",
+        options: { unique: false },
+      },
+      // Índice por actor para consultas por tipo de usuario
+      {
+        name: "por_actor",
+        keyPath: "actor",
+        options: { unique: false },
+      },
+      // Índice por modo de registro (Entrada/Salida)
+      {
+        name: "por_modo_registro",
+        keyPath: "modoRegistro",
+        options: { unique: false },
+      },
+      // Índice por tipo de asistencia (Personal/Estudiantes)
+      {
+        name: "por_tipo_asistencia",
+        keyPath: "tipoAsistencia",
+        options: { unique: false },
+      },
+      // Índice por timestamp de consulta para limpieza de expirados
+      {
+        name: "por_timestamp_consulta",
+        keyPath: "timestampConsulta",
+        options: { unique: false },
+      },
+      // Índice compuesto por DNI y modo de registro para consultas específicas
+      {
+        name: "por_dni_modo",
+        keyPath: ["dni", "modoRegistro"],
+        options: { unique: false },
+      },
+      // Índice compuesto por actor y tipo de asistencia
+      {
+        name: "por_actor_tipo",
+        keyPath: ["actor", "tipoAsistencia"],
+        options: { unique: false },
+      },
+      // Índice compuesto por fecha y DNI para consultas por día específico
+      {
+        name: "por_fecha_dni",
+        keyPath: ["fecha", "dni"],
+        options: { unique: false },
+      },
+    ],
+  },
 };

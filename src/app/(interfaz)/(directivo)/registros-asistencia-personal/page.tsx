@@ -11,28 +11,22 @@ import {
   ErrorResponseAPIBase,
   MessageProperty,
 } from "@/interfaces/shared/apis/types";
-import React, { useState, useEffect } from "react";
+import { useState, useEffect } from "react";
 import {
   AsistenciaDePersonalIDB,
   AsistenciaMensualPersonal,
-  ModoRegistro,
   RegistroEntradaSalida,
-  TipoPersonal,
 } from "@/lib/utils/local/db/models/AsistenciaDePersonal/AsistenciaDePersonalIDB";
 import { convertirAFormato12Horas } from "@/lib/helpers/formatters/fechas-hora/formatearAFormato12Horas";
 import { ENTORNO } from "@/constants/ENTORNO";
 import { Entorno } from "@/interfaces/shared/Entornos";
+import {
+  EventosIDB,
+  IEventoLocal,
+} from "@/lib/utils/local/db/models/EventosIDB";
 
 // 🔧 CONSTANTE DE CONFIGURACIÓN PARA DESARROLLO
 const CONSIDERAR_DIAS_NO_ESCOLARES = false; // false = solo días laborales, true = incluir sábados y domingos
-
-// Interfaces
-interface EventoAPI {
-  Id_Evento: number;
-  Nombre: string;
-  Fecha_Inicio: string;
-  Fecha_Conclusion: string;
-}
 
 interface RegistroDia {
   fecha: string;
@@ -54,10 +48,11 @@ const RegistrosAsistenciaDePersonal = () => {
   const [selectedMes, setSelectedMes] = useState("");
   const [dni, setDni] = useState("");
   const [loading, setLoading] = useState(false);
+  const [loadingEventos, setLoadingEventos] = useState(false);
   const [data, setData] = useState<AsistenciaMensualPersonal | null>(null);
-  const [eventos, setEventos] = useState<EventoAPI[]>([]);
+  const [eventos, setEventos] = useState<IEventoLocal[]>([]);
   const [registros, setRegistros] = useState<RegistroDia[]>([]);
-  const [error, setError] = useState("");
+  const [error, setError] = useState<ErrorResponseAPIBase | null>(null);
   const [successMessage, setSuccessMessage] = useState("");
 
   // Obtener fecha actual
@@ -69,7 +64,7 @@ const RegistrosAsistenciaDePersonal = () => {
   // Función para obtener meses disponibles (hasta mayo o mes actual)
   const getMesesDisponibles = () => {
     const mesesDisponibles: { value: string; label: string }[] = [];
-    const limiteMaximo = Math.min(mesActual, 5); // Máximo hasta mayo (5) o mes actual
+    const limiteMaximo = mesActual;
 
     for (let mes = 3; mes <= limiteMaximo; mes++) {
       // Empezar desde marzo (3)
@@ -90,17 +85,20 @@ const RegistrosAsistenciaDePersonal = () => {
     return fechaObj <= fechaHoy;
   };
 
-  // Instancia del modelo IDB
   const [asistenciaPersonalIDB] = useState(
     () =>
       new AsistenciaDePersonalIDB(
         "API01",
-        setLoading, // Conectar directamente con el estado loading
+        setLoading,
         (error: ErrorResponseAPIBase | null) => {
+          // ✅ CAMBIO: Limpiar error completamente cuando es null
           if (error) {
-            setError(error.message);
+            setError({
+              success: false,
+              message: error.message,
+            });
           } else {
-            setError("");
+            setError(null); // ← En lugar de setError({ success: false, message: "" })
           }
         },
         (message: MessageProperty | null) => {
@@ -124,22 +122,36 @@ const RegistrosAsistenciaDePersonal = () => {
     },
   ];
 
-  // Función para verificar si un día es evento
+  // 🔧 FUNCIÓN CORREGIDA para verificar si un día es evento
   const esEvento = (
     fecha: string
   ): { esEvento: boolean; nombreEvento?: string } => {
     const evento = eventos.find((e) => {
-      const fechaInicio = new Date(e.Fecha_Inicio);
-      const fechaFin = new Date(e.Fecha_Conclusion);
-      const fechaConsulta = new Date(fecha);
+      // ✅ CORRECCIÓN: Agregar 'T00:00:00' para evitar problemas de zona horaria
+      const fechaInicio = new Date(e.Fecha_Inicio + "T00:00:00");
+      const fechaFin = new Date(e.Fecha_Conclusion + "T00:00:00");
+      const fechaConsulta = new Date(fecha + "T00:00:00");
+
+      console.log(`🔍 Verificando evento "${e.Nombre}":`, {
+        fechaConsulta: fechaConsulta.toISOString(),
+        fechaInicio: fechaInicio.toISOString(),
+        fechaFin: fechaFin.toISOString(),
+        estaEnRango: fechaConsulta >= fechaInicio && fechaConsulta <= fechaFin,
+      });
 
       return fechaConsulta >= fechaInicio && fechaConsulta <= fechaFin;
     });
 
-    return {
+    const resultado = {
       esEvento: !!evento,
       nombreEvento: evento?.Nombre,
     };
+
+    if (resultado.esEvento) {
+      console.log(`🎉 Fecha ${fecha} ES EVENTO: "${resultado.nombreEvento}"`);
+    }
+
+    return resultado;
   };
 
   // Función para mapear estados del enum a strings para la UI
@@ -293,7 +305,7 @@ const RegistrosAsistenciaDePersonal = () => {
     }
   };
 
-  // Función para obtener asistencias combinadas de entrada y salida - CON FILTRO CONFIGURABLE
+  // Función para obtener asistencias combinadas de entrada y salida - ✅ MEJORADA PARA USAR EL NUEVO MÉTODO
   const obtenerAsistenciasCombinadas = async (
     rol: RolesSistema,
     dni: string,
@@ -303,110 +315,98 @@ const RegistrosAsistenciaDePersonal = () => {
     { entrada?: RegistroEntradaSalida; salida?: RegistroEntradaSalida }
   > | null> => {
     try {
-      // Determinar tipo de personal según rol
-      let tipoPersonal: TipoPersonal;
-      switch (rol) {
-        case RolesSistema.ProfesorPrimaria:
-          tipoPersonal = TipoPersonal.PROFESOR_PRIMARIA;
-          break;
-        case RolesSistema.ProfesorSecundaria:
-          tipoPersonal = TipoPersonal.PROFESOR_SECUNDARIA;
-          break;
-        case RolesSistema.Auxiliar:
-          tipoPersonal = TipoPersonal.AUXILIAR;
-          break;
-        case RolesSistema.PersonalAdministrativo:
-          tipoPersonal = TipoPersonal.PERSONAL_ADMINISTRATIVO;
-          break;
-        default:
-          throw new Error("Rol no válido");
+      // ✅ CAMBIO PRINCIPAL: Usar el método que incluye cache en lugar del método directo
+      console.log(
+        `🔄 Obteniendo asistencias combinadas usando método con cache: ${rol} ${dni} - mes ${mes}`
+      );
+
+      const resultado =
+        await asistenciaPersonalIDB.obtenerAsistenciaMensualConAPI(
+          rol,
+          dni,
+          mes
+        );
+
+      if (!resultado.encontrado) {
+        console.log(`❌ No se encontraron datos para ${dni} - mes ${mes}`);
+        return null;
       }
 
-      // Obtener registros de entrada y salida por separado
-      const [registroEntrada, registroSalida] = await Promise.all([
-        asistenciaPersonalIDB.obtenerRegistroMensual(
-          tipoPersonal,
-          ModoRegistro.Entrada,
-          dni,
-          mes
-        ),
-        asistenciaPersonalIDB.obtenerRegistroMensual(
-          tipoPersonal,
-          ModoRegistro.Salida,
-          dni,
-          mes
-        ),
-      ]);
-
-      // Combinar registros por día - APLICANDO FILTRO CONFIGURABLE
+      // ✅ PROCESAR DATOS DEL MÉTODO QUE INCLUYE CACHE
       const registrosCombinados: Record<
         string,
         { entrada?: RegistroEntradaSalida; salida?: RegistroEntradaSalida }
       > = {};
+
       const año = new Date().getFullYear();
 
       // Procesar entradas - FILTRAR SEGÚN CONFIGURACIÓN
-      if (registroEntrada) {
-        Object.entries(registroEntrada.registros).forEach(([dia, registro]) => {
-          // Crear fecha para verificar si es día laboral
-          const fechaCompleta = `${año}-${mes
-            .toString()
-            .padStart(2, "0")}-${dia.padStart(2, "0")}`;
+      if (resultado.entrada) {
+        Object.entries(resultado.entrada.registros).forEach(
+          ([dia, registro]) => {
+            // Crear fecha para verificar si es día laboral
+            const fechaCompleta = `${año}-${mes
+              .toString()
+              .padStart(2, "0")}-${dia.padStart(2, "0")}`;
 
-          const esLaboral = esDiaLaboral(fechaCompleta);
-          const debeIncluir = CONSIDERAR_DIAS_NO_ESCOLARES || esLaboral;
+            const esLaboral = esDiaLaboral(fechaCompleta);
+            const debeIncluir = CONSIDERAR_DIAS_NO_ESCOLARES || esLaboral;
 
-          if (debeIncluir) {
-            if (!registrosCombinados[dia]) {
-              registrosCombinados[dia] = {};
+            if (debeIncluir) {
+              if (!registrosCombinados[dia]) {
+                registrosCombinados[dia] = {};
+              }
+              registrosCombinados[dia].entrada = registro;
+              console.log(
+                `✅ INCLUIDO entrada del día ${dia} (${fechaCompleta}) - ${
+                  esLaboral ? "Día laboral" : "Fin de semana"
+                } - Estado: ${registro.estado}`
+              );
+            } else {
+              console.log(
+                `🚫 IGNORADO entrada del día ${dia} (${fechaCompleta}) - No es día laboral`
+              );
             }
-            registrosCombinados[dia].entrada = registro;
-            console.log(
-              `✅ INCLUIDO entrada del día ${dia} (${fechaCompleta}) - ${
-                esLaboral ? "Día laboral" : "Fin de semana"
-              }`
-            );
-          } else {
-            console.log(
-              `🚫 IGNORADO entrada del día ${dia} (${fechaCompleta}) - No es día laboral`
-            );
           }
-        });
+        );
       }
 
       // Procesar salidas - FILTRAR SEGÚN CONFIGURACIÓN
-      if (registroSalida) {
-        Object.entries(registroSalida.registros).forEach(([dia, registro]) => {
-          // Crear fecha para verificar si es día laboral
-          const fechaCompleta = `${año}-${mes
-            .toString()
-            .padStart(2, "0")}-${dia.padStart(2, "0")}`;
+      if (resultado.salida) {
+        Object.entries(resultado.salida.registros).forEach(
+          ([dia, registro]) => {
+            // Crear fecha para verificar si es día laboral
+            const fechaCompleta = `${año}-${mes
+              .toString()
+              .padStart(2, "0")}-${dia.padStart(2, "0")}`;
 
-          const esLaboral = esDiaLaboral(fechaCompleta);
-          const debeIncluir = CONSIDERAR_DIAS_NO_ESCOLARES || esLaboral;
+            const esLaboral = esDiaLaboral(fechaCompleta);
+            const debeIncluir = CONSIDERAR_DIAS_NO_ESCOLARES || esLaboral;
 
-          if (debeIncluir) {
-            if (!registrosCombinados[dia]) {
-              registrosCombinados[dia] = {};
+            if (debeIncluir) {
+              if (!registrosCombinados[dia]) {
+                registrosCombinados[dia] = {};
+              }
+              registrosCombinados[dia].salida = registro;
+              console.log(
+                `✅ INCLUIDO salida del día ${dia} (${fechaCompleta}) - ${
+                  esLaboral ? "Día laboral" : "Fin de semana"
+                } - Estado: ${registro.estado}`
+              );
+            } else {
+              console.log(
+                `🚫 IGNORADO salida del día ${dia} (${fechaCompleta}) - No es día laboral`
+              );
             }
-            registrosCombinados[dia].salida = registro;
-            console.log(
-              `✅ INCLUIDO salida del día ${dia} (${fechaCompleta}) - ${
-                esLaboral ? "Día laboral" : "Fin de semana"
-              }`
-            );
-          } else {
-            console.log(
-              `🚫 IGNORADO salida del día ${dia} (${fechaCompleta}) - No es día laboral`
-            );
           }
-        });
+        );
       }
 
       console.log(
-        "📊 DEBUG - Registros combinados finales:",
+        "📊 DEBUG - Registros combinados finales (incluyendo cache):",
         registrosCombinados
       );
+
       return Object.keys(registrosCombinados).length > 0
         ? registrosCombinados
         : null;
@@ -416,12 +416,12 @@ const RegistrosAsistenciaDePersonal = () => {
     }
   };
 
-  // Función para procesar los datos de asistencia - APLICANDO LAS 4 REGLAS + FILTRO DE FECHA + CONFIGURACIÓN DE DÍAS
+  // ✅ MODIFICACIÓN ADICIONAL: Mejorar el procesamiento de datos para mostrar mejor la info del cache
   const procesarDatos = async () => {
     if (!selectedRol || !selectedMes || !dni) return;
 
     try {
-      // Obtener registros combinados de entrada y salida (filtrados según configuración)
+      // ✅ USAR LA FUNCIÓN MEJORADA que ahora incluye datos del cache
       const registrosCombinados = await obtenerAsistenciasCombinadas(
         selectedRol as RolesSistema,
         dni,
@@ -440,7 +440,7 @@ const RegistrosAsistenciaDePersonal = () => {
       );
       console.log(`📅 DEBUG - Fechas generadas:`, todasLasFechas);
       console.log(
-        `📅 DEBUG - Claves del JSON:`,
+        `📅 DEBUG - Claves del JSON (incluyendo cache):`,
         registrosCombinados ? Object.keys(registrosCombinados) : "Sin registros"
       );
 
@@ -505,6 +505,9 @@ const RegistrosAsistenciaDePersonal = () => {
 
         const registroDia = registrosCombinados[dia];
 
+        // ✅ RESTO DEL PROCESAMIENTO IGUAL (sin cambios en esta parte)
+        // ... (mantener toda la lógica existente de procesamiento de entrada y salida)
+
         // Procesar información de entrada
         let entradaProgramada = "N/A";
         let entradaReal = "No registrado";
@@ -563,7 +566,7 @@ const RegistrosAsistenciaDePersonal = () => {
             console.log(
               `✅ DEBUG - Día ${dia} entrada: ${mapearEstadoParaUI(
                 estadoEntrada
-              )} (timestamp: ${registroDia.entrada.timestamp})`
+              )} (timestamp: ${registroDia.entrada.timestamp}) - DESDE CACHE`
             );
           }
           // Casos edge donde hay estado pero no timestamp válido
@@ -573,12 +576,12 @@ const RegistrosAsistenciaDePersonal = () => {
             console.log(
               `⚠️ DEBUG - Día ${dia} entrada: ${mapearEstadoParaUI(
                 estadoEntrada
-              )} (sin timestamp válido)`
+              )} (sin timestamp válido) - DESDE CACHE`
             );
           }
         }
 
-        // Procesar información de salida
+        // Procesar información de salida (similar a entrada)
         let salidaProgramada = "N/A";
         let salidaReal = "No registrado";
         let diferenciaSalida = "N/A";
@@ -590,16 +593,11 @@ const RegistrosAsistenciaDePersonal = () => {
             JSON.stringify(registroDia.salida, null, 2)
           );
 
-          // REGLA 2: Si toda la salida es null = Usuario inactivo ("24": null)
+          // Similar lógica que entrada pero para salida
           if (registroDia.salida === null) {
             salidaReal = "Inactivo";
             estadoSalida = EstadosAsistenciaPersonal.Inactivo;
-            console.log(
-              `❌ DEBUG - Día ${dia} salida: INACTIVO (salida completa null)`
-            );
-          }
-          // REGLA 3: Si timestamp Y desfase son null/0 = Falta
-          else if (
+          } else if (
             (registroDia.salida.timestamp === null ||
               registroDia.salida.timestamp === 0) &&
             (registroDia.salida.desfaseSegundos === null ||
@@ -607,20 +605,13 @@ const RegistrosAsistenciaDePersonal = () => {
           ) {
             salidaReal = "Falta";
             estadoSalida = EstadosAsistenciaPersonal.Falta;
-            console.log(
-              `❌ DEBUG - Día ${dia} salida: FALTA (timestamp y desfase null/0)`
-            );
-          }
-          // Si hay timestamp válido, usar datos reales
-          else if (registroDia.salida.timestamp > 0) {
-            // 🔍 AÑADIR debug de timestamp
+          } else if (registroDia.salida.timestamp > 0) {
             debugTimestamp(
               "SALIDA",
               registroDia.salida.timestamp,
               registroDia.salida.desfaseSegundos
             );
 
-            // Usar el estado que viene del registro directamente
             estadoSalida = registroDia.salida.estado;
             salidaProgramada = calcularHoraProgramada(
               registroDia.salida.timestamp,
@@ -636,17 +627,15 @@ const RegistrosAsistenciaDePersonal = () => {
             console.log(
               `✅ DEBUG - Día ${dia} salida: ${mapearEstadoParaUI(
                 estadoSalida
-              )} (timestamp: ${registroDia.salida.timestamp})`
+              )} (timestamp: ${registroDia.salida.timestamp}) - DESDE CACHE`
             );
-          }
-          // Casos edge donde hay estado pero no timestamp válido
-          else {
+          } else {
             estadoSalida = registroDia.salida.estado;
             salidaReal = mapearEstadoParaUI(estadoSalida);
             console.log(
               `⚠️ DEBUG - Día ${dia} salida: ${mapearEstadoParaUI(
                 estadoSalida
-              )} (sin timestamp válido)`
+              )} (sin timestamp válido) - DESDE CACHE`
             );
           }
         }
@@ -665,50 +654,49 @@ const RegistrosAsistenciaDePersonal = () => {
           esDiaNoEscolar: !esLaboral,
         };
 
-        console.log(`📊 DEBUG - Resultado final día ${dia}:`, resultado);
+        console.log(
+          `📊 DEBUG - Resultado final día ${dia} (con cache):`,
+          resultado
+        );
         return resultado;
       });
 
       setRegistros(registrosResultado);
     } catch (error) {
       console.error("Error al procesar datos:", error);
-      setError("Error al procesar los datos de asistencia");
+      setError({
+        success: false,
+        message: "Error al procesar los datos de asistencia",
+      });
     }
   };
 
   // Función para obtener eventos (mock)
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const obtenerEventos = async (mes: number) => {
     try {
-      setEventos([
-        {
-          Id_Evento: 1,
-          Nombre: "Día del Trabajador",
-          Fecha_Inicio: "2025-05-01",
-          Fecha_Conclusion: "2025-05-01",
-        },
-        {
-          Id_Evento: 2,
-          Nombre: "Fiestas Patrias",
-          Fecha_Inicio: "2025-07-28",
-          Fecha_Conclusion: "2025-07-29",
-        },
-      ]);
+      const eventosIDB = new EventosIDB("API01", setLoadingEventos);
+
+      const eventosDelMes = await eventosIDB.getEventosPorMes(mes);
+      setEventos(eventosDelMes);
     } catch (error) {
       console.error("Error obteniendo eventos:", error);
     }
   };
 
-  // Función para buscar asistencias
+  // ✅ CORRECCIÓN 1: Limpiar error correctamente
   const buscarAsistencias = async () => {
     if (!selectedRol || !selectedMes || !dni || dni.length !== 8) {
-      setError("Por favor completa todos los campos correctamente");
+      setError({
+        success: false,
+        message: "Por favor completa todos los campos correctamente",
+      });
       return;
     }
 
-    setError("");
+    // ✅ CAMBIO: Limpiar error completamente en lugar de setear mensaje vacío
+    setError(null); // ← En lugar de setError({ success: false, message: "" })
     setSuccessMessage("");
-    setLoading(true); // Activar loading manualmente
+    setLoading(true);
 
     try {
       await obtenerEventos(parseInt(selectedMes));
@@ -734,17 +722,20 @@ const RegistrosAsistenciaDePersonal = () => {
         setData(datosParaMostrar);
         setSuccessMessage(resultado.mensaje);
       } else {
-        setError(resultado.mensaje);
+        setError({ success: false, message: resultado.mensaje });
         setData(null);
         setRegistros([]);
       }
     } catch (error) {
       console.error("Error al buscar asistencias:", error);
-      setError("Error al obtener los datos de asistencia");
+      setError({
+        success: false,
+        message: "Error al obtener los datos de asistencia",
+      });
       setData(null);
       setRegistros([]);
     } finally {
-      setLoading(false); // Desactivar loading manualmente
+      setLoading(false);
     }
   };
 
@@ -789,7 +780,7 @@ const RegistrosAsistenciaDePersonal = () => {
             <select
               value={selectedRol}
               onChange={(e) => setSelectedRol(e.target.value)}
-              disabled={loading} // Bloquear durante carga
+              disabled={loading || loadingEventos} // Bloquear durante carga
               className="w-full px-3 py-2 border border-gris-claro rounded-md focus:outline-none focus:ring-2 focus:ring-azul-principal disabled:opacity-50 disabled:cursor-not-allowed"
             >
               <option value="">Seleccionar rol</option>
@@ -809,7 +800,7 @@ const RegistrosAsistenciaDePersonal = () => {
             <select
               value={selectedMes}
               onChange={(e) => setSelectedMes(e.target.value)}
-              disabled={loading} // Bloquear durante carga
+              disabled={loading && loadingEventos} // Bloquear durante carga
               className="w-full px-3 py-2 border border-gris-claro rounded-md focus:outline-none focus:ring-2 focus:ring-azul-principal disabled:opacity-50 disabled:cursor-not-allowed"
             >
               <option value="">Seleccionar mes</option>
@@ -833,7 +824,7 @@ const RegistrosAsistenciaDePersonal = () => {
                 const value = e.target.value.replace(/\D/g, "").slice(0, 8);
                 setDni(value);
               }}
-              disabled={loading} // Bloquear durante carga
+              disabled={loading && loadingEventos} // Bloquear durante carga
               minLength={8}
               maxLength={8}
               placeholder="12345678"
@@ -845,10 +836,10 @@ const RegistrosAsistenciaDePersonal = () => {
           <div className="flex items-end">
             <button
               onClick={buscarAsistencias}
-              disabled={loading}
+              disabled={loading || loadingEventos}
               className="w-full bg-azul-principal text-white px-4 py-2 rounded-md hover:bg-blue-600 disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center justify-center"
             >
-              {loading ? (
+              {loading && loadingEventos ? (
                 <>
                   <svg
                     className="animate-spin -ml-1 mr-3 h-4 w-4 text-white"
@@ -882,7 +873,7 @@ const RegistrosAsistenciaDePersonal = () => {
         {/* Error */}
         {error && (
           <div className="mt-4 p-3 bg-red-100 border border-red-300 rounded-md">
-            <p className="text-red-700 text-sm">{error}</p>
+            <p className="text-red-700 text-sm">{error.message}</p>
           </div>
         )}
 
@@ -895,7 +886,7 @@ const RegistrosAsistenciaDePersonal = () => {
       </div>
 
       {/* Información del usuario */}
-      {data && !loading && (
+      {data && !loading && !loadingEventos && (
         <div className="bg-white rounded-lg shadow-md p-4 lg-only:p-6 mb-6">
           <h3 className="text-lg lg-only:text-xl font-semibold text-gris-oscuro mb-2">
             Asistencias del {roles.find((r) => r.value === selectedRol)?.label}
@@ -913,14 +904,13 @@ const RegistrosAsistenciaDePersonal = () => {
         </div>
       )}
 
-      {/* Loader cuando está buscando */}
-      {loading && (
+      {(loading || loadingEventos) && (
         <div className="bg-white rounded-lg shadow-md p-8 mb-6">
           <div className="flex flex-col items-center justify-center">
             <div className="relative">
               {/* Spinner principal */}
               <div className="w-16 h-16 border-4 border-gray-200 border-t-azul-principal rounded-full animate-spin"></div>
-              {/* Pulsos concéntricos */}
+              {/* Pulsos concéntricos - MANTENER */}
               <div className="absolute inset-0 w-16 h-16 border-4 border-azul-principal/20 rounded-full animate-ping"></div>
             </div>
             <p className="mt-4 text-gris-intermedio font-medium">
@@ -934,7 +924,7 @@ const RegistrosAsistenciaDePersonal = () => {
       )}
 
       {/* Tabla de registros */}
-      {registros.length > 0 && !loading && (
+      {registros.length > 0 && !loading && !loadingEventos && (
         <div className="bg-white rounded-lg shadow-md overflow-hidden">
           <div className="overflow-x-auto">
             <table className="w-full">
@@ -1047,7 +1037,7 @@ const RegistrosAsistenciaDePersonal = () => {
       )}
 
       {/* Leyenda explicativa de estados */}
-      {registros.length > 0 && !loading && (
+      {registros.length > 0 && !loading && !loadingEventos && (
         <div className="mt-6 bg-white rounded-lg shadow-md p-4 lg-only:p-6">
           <h4 className="text-sm lg-only:text-base font-semibold text-gris-oscuro mb-4">
             Leyenda de Estados de Asistencia

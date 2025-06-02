@@ -12,7 +12,7 @@ export class HandlerProfesorPrimariaAsistenciaResponse extends HandlerAsistencia
     this.profesorPrimariaData = asistenciaData;
   }
 
-  public getHorarioTomaAsistencia(): HorarioTomaAsistencia {
+  public getMiHorarioTomaAsistencia(): HorarioTomaAsistencia {
     return this.profesorPrimariaData.HorarioTomaAsistenciaProfesorPrimaria;
   }
 
@@ -31,7 +31,7 @@ export class HandlerProfesorPrimariaAsistenciaResponse extends HandlerAsistencia
   }
 
   public estaActivaTomaAsistencia(): boolean {
-    return this.estaHorarioActivo(this.getHorarioTomaAsistencia());
+    return this.estaHorarioActivo(this.getMiHorarioTomaAsistencia());
   }
 
   public estaActivoHorarioEscolarPrimaria(): boolean {

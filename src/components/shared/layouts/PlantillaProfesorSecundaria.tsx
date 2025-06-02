@@ -28,7 +28,7 @@ const PlantillaProfesorSecundaria = ({
         Google_Drive_Foto_ID={Google_Drive_Foto_ID}
       />
       {children}
-      <MarcarAsistenciaDePersonalButton />
+      <MarcarAsistenciaDePersonalButton rol={RolesSistema.ProfesorSecundaria} />
       <NavBarFooter Rol={RolesSistema.ProfesorSecundaria} />
     </main>
   );

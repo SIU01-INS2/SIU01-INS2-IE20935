@@ -1,16 +1,16 @@
 import { RolesSistema } from "@/interfaces/shared/RolesSistema";
 import { CLN01_Stores } from "./CLN01_Stores";
+import { SIASIS_CLN01_VERSION } from "@/constants/SIASIS_CLN01_VERSION";
 
 export class IndexedDBConnection {
   private static instance: IndexedDBConnection;
   private db: IDBDatabase | null = null;
-  
+
   // Propiedad estática que se inicializa de forma inteligente
   private static _rol: RolesSistema | null = null;
-  
+
   // Usamos la variable de entorno para la versión
-  private dbVersionString: string =
-    process.env.NEXT_PUBLIC_CLN01_VERSION || "1.0.0";
+  private dbVersionString: string = SIASIS_CLN01_VERSION;
   private version: number;
   private isInitializing: boolean = false;
   private initPromise: Promise<IDBDatabase> | null = null;
@@ -37,7 +37,7 @@ export class IndexedDBConnection {
   public static set rol(newRol: RolesSistema) {
     IndexedDBConnection._rol = newRol;
     // Guardar en localStorage si estamos en el cliente
-    if (typeof window !== 'undefined' && window.localStorage) {
+    if (typeof window !== "undefined" && window.localStorage) {
       localStorage.setItem("rol", newRol);
     }
   }
@@ -47,7 +47,7 @@ export class IndexedDBConnection {
    */
   private static loadRolFromStorage(): RolesSistema {
     // Verificar si estamos en el cliente
-    if (typeof window !== 'undefined' && window.localStorage) {
+    if (typeof window !== "undefined" && window.localStorage) {
       const storedRole = localStorage.getItem("rol") as RolesSistema;
       if (storedRole && Object.values(RolesSistema).includes(storedRole)) {
         return storedRole;
@@ -87,16 +87,16 @@ export class IndexedDBConnection {
    */
   public async changeRole(newRole: RolesSistema): Promise<void> {
     const currentRole = IndexedDBConnection.rol;
-    
+
     // Si es el mismo rol, no hacer nada
     if (currentRole === newRole) return;
-    
+
     // Cerrar la conexión actual
     this.close();
-    
+
     // Cambiar el rol (esto automáticamente actualiza localStorage)
     IndexedDBConnection.rol = newRole;
-    
+
     // Reinicializar con la nueva base de datos
     await this.init();
   }
@@ -106,8 +106,8 @@ export class IndexedDBConnection {
    */
   public async init(): Promise<IDBDatabase> {
     // Verificar que estamos en el cliente
-    if (typeof window === 'undefined') {
-      throw new Error('IndexedDB solo está disponible en el navegador');
+    if (typeof window === "undefined") {
+      throw new Error("IndexedDB solo está disponible en el navegador");
     }
 
     if (this.db) return this.db;
@@ -120,7 +120,9 @@ export class IndexedDBConnection {
       const request = indexedDB.open(this.dbName, this.version);
 
       request.onupgradeneeded = (event) => {
-        console.log(`Actualizando base de datos a versión ${this.version} para rol ${IndexedDBConnection.rol}`);
+        console.log(
+          `Actualizando base de datos a versión ${this.version} para rol ${IndexedDBConnection.rol}`
+        );
         const db = (event.target as IDBOpenDBRequest).result;
 
         // Si hay stores existentes que ya no necesitamos, los eliminamos
@@ -273,7 +275,7 @@ export class IndexedDBConnection {
       currentRole: IndexedDBConnection.rol,
       dbName: this.dbName,
       isConnected: !!this.db,
-      isInitializing: this.isInitializing
+      isInitializing: this.isInitializing,
     };
   }
 }

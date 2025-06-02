@@ -26,7 +26,7 @@ async function esContenidoJSON(response: Response): Promise<boolean> {
     if (!contentType || !contentType.includes("application/json")) {
       // Si no es application/json, verificamos el contenido mismo
       const texto = await response.clone().text();
-      
+
       // Intentar hacer un parse del texto para ver si es JSON válido
       JSON.parse(texto);
       return true;
@@ -50,7 +50,8 @@ export async function GET(req: NextRequest) {
     try {
       // Intento principal: obtener datos del blob
       const response = await fetch(
-        `${process.env.RDP04_THIS_INSTANCE_VERCEL_BLOB_BASE_URL!}/${NOMBRE_ARCHIVO_CON_DATOS_ASISTENCIA_DIARIOS}`
+        `${process.env
+          .RDP04_THIS_INSTANCE_VERCEL_BLOB_BASE_URL!}/${NOMBRE_ARCHIVO_CON_DATOS_ASISTENCIA_DIARIOS}`
       );
 
       if (!response.ok || !(await esContenidoJSON(response))) {
@@ -58,10 +59,12 @@ export async function GET(req: NextRequest) {
       }
 
       datosCompletos = await response.json();
-      
     } catch (blobError) {
       // Plan B: Si el primer fetch falla, intentar con Google Drive
-      console.warn("Error al obtener datos del blob, usando respaldo:", blobError);
+      console.warn(
+        "Error al obtener datos del blob, usando respaldo:",
+        blobError
+      );
       usandoRespaldo = true;
 
       try {
@@ -79,7 +82,10 @@ export async function GET(req: NextRequest) {
           `https://drive.google.com/uc?export=download&id=${archivoDatosAsistenciaHoyGoogleDriveID}`
         );
 
-        if (!respaldoResponse.ok || !(await esContenidoJSON(respaldoResponse))) {
+        if (
+          !respaldoResponse.ok ||
+          !(await esContenidoJSON(respaldoResponse))
+        ) {
           throw new Error(
             `Error en la respuesta de respaldo: ${respaldoResponse.status} ${respaldoResponse.statusText}`
           );
@@ -87,11 +93,14 @@ export async function GET(req: NextRequest) {
 
         datosCompletos = await respaldoResponse.json();
         console.log("Datos obtenidos exitosamente desde respaldo Google Drive");
-        
       } catch (respaldoError) {
         // Si también falla el respaldo, lanzar un error más descriptivo
         console.error("Error al obtener datos desde respaldo:", respaldoError);
-        throw new Error(`Falló el acceso principal y el respaldo: ${(respaldoError as Error).message}`);
+        throw new Error(
+          `Falló el acceso principal y el respaldo: ${
+            (respaldoError as Error).message
+          }`
+        );
       }
     }
 
@@ -105,9 +114,10 @@ export async function GET(req: NextRequest) {
     // Devolver los datos filtrados con indicador de fuente
     return NextResponse.json({
       ...datosFiltrados,
-      _debug: usandoRespaldo ? "Datos obtenidos desde respaldo" : "Datos obtenidos desde fuente principal"
+      _debug: usandoRespaldo
+        ? "Datos obtenidos desde respaldo"
+        : "Datos obtenidos desde fuente principal",
     });
-    
   } catch (error) {
     console.error("Error al obtener datos de asistencia:", error);
     // Determinar el tipo de error
@@ -144,14 +154,19 @@ export async function GET(req: NextRequest) {
       // Si falló la búsqueda en Redis
       else if (error.message.includes("No se encontró el ID")) {
         logoutType = LogoutTypes.ERROR_DATOS_NO_DISPONIBLES;
-        errorDetails.mensaje = "No se pudo encontrar la información de asistencia";
+        errorDetails.mensaje =
+          "No se pudo encontrar la información de asistencia";
         errorDetails.siasisComponent = "RDP05"; // Error específico de Redis
       }
       // Si falló tanto el acceso principal como el respaldo
-      else if (error.message.includes("Falló el acceso principal y el respaldo")) {
+      else if (
+        error.message.includes("Falló el acceso principal y el respaldo")
+      ) {
         logoutType = LogoutTypes.ERROR_DATOS_NO_DISPONIBLES;
-        errorDetails.mensaje = "No se pudo obtener la información de asistencia";
-        errorDetails.contexto = "Falló tanto el acceso a blob como a Google Drive";
+        errorDetails.mensaje =
+          "No se pudo obtener la información de asistencia";
+        errorDetails.contexto =
+          "Falló tanto el acceso a blob como a Google Drive";
       }
 
       errorDetails.mensaje += `: ${error.message}`;
@@ -160,7 +175,6 @@ export async function GET(req: NextRequest) {
     return redirectToLogin(logoutType, errorDetails);
   }
 }
-
 
 // Función para filtrar los datos según el rol
 function filtrarDatosSegunRol(
@@ -242,15 +256,14 @@ function filtrarDatosSegunRol(
     case RolesSistema.PersonalAdministrativo:
       // Personal administrativo recibe solo su propio horario
       const personalInfo = datos.ListaDePersonalesAdministrativos.find(
-        (p) => p.DNI_Personal_Administrativo === idUsuario
+        (p) => p.DNI_Personal_Administrativo == idUsuario
       );
-
       return {
         ...datosBase,
         HorarioPersonal: personalInfo
           ? {
-              Horario_Laboral_Entrada: personalInfo.Horario_Laboral_Entrada,
-              Horario_Laboral_Salida: personalInfo.Horario_Laboral_Salida,
+              Horario_Laboral_Entrada: personalInfo.Hora_Entrada_Dia_Actual,
+              Horario_Laboral_Salida: personalInfo.Hora_Salida_Dia_Actual,
             }
           : false,
       } as PersonalAdministrativoAsistenciaResponse;

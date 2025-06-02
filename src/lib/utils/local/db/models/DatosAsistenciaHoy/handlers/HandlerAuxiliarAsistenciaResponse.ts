@@ -12,7 +12,7 @@ export class HandlerAuxiliarAsistenciaResponse extends HandlerAsistenciaBase {
     this.auxiliarData = asistenciaData;
   }
 
-  public getHorarioTomaAsistencia(): HorarioTomaAsistencia {
+  public getMiHorarioTomaAsistencia(): HorarioTomaAsistencia {
     return this.auxiliarData.HorarioTomaAsistenciaAuxiliares;
   }
 
@@ -31,7 +31,7 @@ export class HandlerAuxiliarAsistenciaResponse extends HandlerAsistenciaBase {
   }
 
   public estaActivaTomaAsistencia(): boolean {
-    return this.estaHorarioActivo(this.getHorarioTomaAsistencia());
+    return this.estaHorarioActivo(this.getMiHorarioTomaAsistencia());
   }
 
   public estaActivoHorarioEscolarSecundaria(): boolean {

@@ -14,14 +14,20 @@ import {
 } from "@/interfaces/shared/Meses";
 import { ENTORNO } from "@/constants/ENTORNO";
 import { Entorno } from "@/interfaces/shared/Entornos";
+import {
+  OFFSET_DIAS_ADICIONALES_SIU01,
+  OFFSET_HORAS_ADICIONALES_SIU01,
+  OFFSET_MINUTOS_ADICIONALES_SIU01,
+  OFFSET_SEGUNDOS_ADICIONALES_SIU01,
+} from "@/constants/mocks/OFFSET_FECHAS_HORAS_SIU01";
 
 // Constante para el offset de tiempo (para pruebas)
 // Modificar estos valores para cambiar el offset aplicado a la hora del servidor
 export const TIME_OFFSET = {
-  days: 0,
-  minutes: 0,
-  hours: 0, // Agregar propiedad 'hours' con un valor predeterminado
-  seconds: 0,
+  days: OFFSET_DIAS_ADICIONALES_SIU01, // Días adicionales para el offset
+  hours: OFFSET_HORAS_ADICIONALES_SIU01, // Agregar propiedad 'hours' con un valor predeterminado
+  minutes: OFFSET_MINUTOS_ADICIONALES_SIU01,
+  seconds: OFFSET_SEGUNDOS_ADICIONALES_SIU01,
   enabled: ENTORNO === Entorno.LOCAL, // Habilitar/deshabilitar el offset
 };
 

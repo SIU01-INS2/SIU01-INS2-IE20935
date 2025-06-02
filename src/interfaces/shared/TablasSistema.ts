@@ -122,6 +122,8 @@ export enum TablasLocal {
   Tabla_Datos_Usuario = "user_data",
   Tabla_Solicitudes_Offline = "offline_requests",
   Tabla_Metadatos_Sistema = "system_meta",
+  // ✅ NUEVA ENTRADA: Tabla para asistencias del día actual
+  Tabla_Asistencias_Tomadas_Hoy = "asistencias_tomadas_hoy",
 }
 
 /**
@@ -408,6 +410,13 @@ export const TablasSistema = {
     nombreLocal: TablasLocal.Tabla_Metadatos_Sistema,
     descripcion: "Metadatos y configuraciones del sistema local",
     sincronizable: false,
+  },
+
+  ASISTENCIAS_TOMADAS_HOY: {
+    nombreLocal: TablasLocal.Tabla_Asistencias_Tomadas_Hoy,
+    descripcion:
+      "Cache temporal de asistencias consultadas desde Redis para el día actual",
+    sincronizable: false, // ✅ IMPORTANTE: No se sincroniza con servidor
   },
 };
 

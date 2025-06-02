@@ -1,9 +1,14 @@
-import ModuloEnDesarrollo from "@/components/shared/MensajeModuloEnDesarrollo";
+import Link from "next/link";
 
 const Programacion = () => {
   return (
     <>
-      <ModuloEnDesarrollo />
+      <Link
+        href={"programacion/gestion-fechas-escolares"}
+        as={"programacion/gestion-fechas-escolares"}
+      >
+        GestionFechasEscolares
+      </Link>
     </>
   );
 };

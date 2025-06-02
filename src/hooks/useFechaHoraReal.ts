@@ -1,6 +1,13 @@
+import { ENTORNO } from "@/constants/ENTORNO";
+import { INTERVALO_MINUTOS_SINCRONIZACION_HORA_REAL } from "@/constants/INTERVALO_MINUTOS_SINCRONIZACION_HORA_REAL";
 import { ZONA_HORARIA_LOCAL } from "@/constants/ZONA_HORARIA_LOCAL";
-import { fetchFechaHoraActual, setTimezone, updateFechaHoraActual } from "@/global/state/others/fechaHoraActualReal";
+import {
+  fetchFechaHoraActual,
+  setTimezone,
+  updateFechaHoraActual,
+} from "@/global/state/others/fechaHoraActualReal";
 import { AppDispatch, RootState } from "@/global/store";
+import { Entorno } from "@/interfaces/shared/Entornos";
 import { useEffect, useRef } from "react";
 import { useDispatch, useSelector } from "react-redux";
 
@@ -12,16 +19,16 @@ interface UseFechaHoraRealOptions {
 }
 
 export const useFechaHoraReal = ({
-  syncInterval = 5 * 60 * 1000, // 5 minutos
+  syncInterval = INTERVALO_MINUTOS_SINCRONIZACION_HORA_REAL * 60 * 1000, // X minutos
   updateInterval = 1000, // 1 segundo
-  autoSync = true,
+  autoSync = ENTORNO !== Entorno.LOCAL, //Si es diferente de local, sincronizar automáticamente
   timezone = ZONA_HORARIA_LOCAL,
 }: UseFechaHoraRealOptions = {}) => {
   const dispatch = useDispatch<AppDispatch>();
   const fechaHoraState = useSelector(
     (state: RootState) => state.others.fechaHoraActualReal
   );
-  
+
   const syncIntervalRef = useRef<NodeJS.Timeout | null>(null);
   const updateIntervalRef = useRef<NodeJS.Timeout | null>(null);
 
@@ -86,12 +93,12 @@ export const useFechaHoraReal = ({
     sincronizarConServidor,
     cambiarZonaHoraria,
     error: fechaHoraState.error,
-    
+    fechaHoraRealState: fechaHoraState,
     // Datos del estado actual
     fechaHora: fechaHoraState.fechaHora,
     formateada: fechaHoraState.formateada,
     utilidades: fechaHoraState.utilidades,
-    inicializado: fechaHoraState.inicializado
+    inicializado: fechaHoraState.inicializado,
   };
 };
 

@@ -28,7 +28,7 @@ const PlantillaAuxiliar = ({
         Rol={RolesSistema.Auxiliar}
       />
       {children}
-      <MarcarAsistenciaDePersonalButton />
+      <MarcarAsistenciaDePersonalButton rol={RolesSistema.Auxiliar} />
       <NavBarFooter Rol={RolesSistema.Auxiliar} />
     </main>
   );

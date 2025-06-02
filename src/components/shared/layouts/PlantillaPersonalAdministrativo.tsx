@@ -28,7 +28,9 @@ const PlantillaPersonalAdministrativo = ({
         Google_Drive_Foto_ID={Google_Drive_Foto_ID}
       />
       {children}
-      <MarcarAsistenciaDePersonalButton />
+      <MarcarAsistenciaDePersonalButton
+        rol={RolesSistema.PersonalAdministrativo}
+      />
       <NavBarFooter Rol={RolesSistema.PersonalAdministrativo} />
     </main>
   );

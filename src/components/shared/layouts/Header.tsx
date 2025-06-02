@@ -80,11 +80,10 @@ const Header = ({
     obtenerDatosAsistenciaHoy();
   }, [inicializado]);
 
-  
-
   // Efecto para obtener datos de asistencia al cargar el componente
   useEffect(() => {
     // Sincronizar la hora cuando la ventana vuelve a ser visible
+    sincronizarConServidor();
     document.addEventListener("visibilitychange", () => {
       if (document.visibilityState === "visible") {
         sincronizarConServidor();
@@ -158,6 +157,7 @@ const Header = ({
   return (
     <>
       <ComunicadosDeHoy />
+
       <header
         style={{ boxShadow: "0 0px 2px 2px rgba(0,0,0,0.2)" }}
         id="header"

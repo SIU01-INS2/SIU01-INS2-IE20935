@@ -28,7 +28,7 @@ const PlantillaTutor = ({
         Rol={RolesSistema.Tutor}
       />
       {children}
-      <MarcarAsistenciaDePersonalButton />
+      <MarcarAsistenciaDePersonalButton rol={RolesSistema.Tutor} />
       <NavBarFooter Rol={RolesSistema.Tutor} />
     </main>
   );

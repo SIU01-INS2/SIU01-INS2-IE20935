@@ -29,7 +29,7 @@ const PlantillaProfesorPrimaria = ({
       />
       {children}
 
-      <MarcarAsistenciaDePersonalButton />
+      <MarcarAsistenciaDePersonalButton rol={RolesSistema.ProfesorPrimaria} />
       <NavBarFooter Rol={RolesSistema.ProfesorPrimaria} />
     </main>
   );
