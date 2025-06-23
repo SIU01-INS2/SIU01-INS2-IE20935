@@ -18,7 +18,8 @@ const useRequestAPIFeatures = (
   const [successMessage, setSuccessMessage] = useState<MessageProperty | null>(
     null
   );
-  const { fetchSiasisAPI, fetchCancelables } = useSiasisAPIs(siasisAPI);
+  const { fetchSiasisAPI, fetchCancelables, cancelAllRequests } =
+    useSiasisAPIs(siasisAPI);
 
   return {
     fetchSiasisAPI,
@@ -29,6 +30,7 @@ const useRequestAPIFeatures = (
     setError,
     successMessage,
     setSuccessMessage,
+    cancelAllRequests,
   };
 };
 

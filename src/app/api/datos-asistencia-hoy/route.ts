@@ -200,6 +200,7 @@ function filtrarDatosSegunRol(
         ...datosBase,
         ListaDePersonalesAdministrativos:
           datos.ListaDePersonalesAdministrativos,
+        ListaDeDirectivos: datos.ListaDeDirectivos,
         ListaDeProfesoresPrimaria: datos.ListaDeProfesoresPrimaria,
         ListaDeProfesoresSecundaria: datos.ListaDeProfesoresSecundaria,
         HorariosLaboraresGenerales: datos.HorariosLaboraresGenerales,

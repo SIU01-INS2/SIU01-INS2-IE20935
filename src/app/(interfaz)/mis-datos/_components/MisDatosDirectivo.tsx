@@ -37,8 +37,14 @@ import SuccessMessage from "@/components/shared/successes/SuccessMessage";
 
 const MisDatosDirectivo = ({
   googleDriveFotoIdCookieValue,
+  nombresCookieValue,
+  apellidosCookieValue,
+  generoCookieValue,
 }: {
   googleDriveFotoIdCookieValue: string | null;
+  nombresCookieValue: string | null;
+  apellidosCookieValue: string | null;
+  generoCookieValue: Genero | null;
 }) => {
   const [modoEdicion, setModoEdicion] = useState(false);
 
@@ -72,7 +78,7 @@ const MisDatosDirectivo = ({
       Google_Drive_Foto_ID,
     }));
 
-    fetch("/api/auth/update-cookie/photo", {
+    fetch("/api/auth/update-cookies", {
       method: "PUT",
       body: JSON.stringify({
         Google_Drive_Foto_ID,
@@ -117,13 +123,6 @@ const MisDatosDirectivo = ({
         setMisDatosDirectivoSaved(misDatosDirectivoData);
 
         //Actualizando Cache
-        if (
-          googleDriveFotoIdCookieValue !==
-          misDatosDirectivoData.Google_Drive_Foto_ID
-        ) {
-          updateFoto(misDatosDirectivoData.Google_Drive_Foto_ID);
-        }
-
         await userStorage.saveUserData({
           Apellidos: misDatosDirectivoData.Apellidos,
           Genero: misDatosDirectivoData.Genero,
@@ -132,6 +131,26 @@ const MisDatosDirectivo = ({
         });
 
         setIsSomethingLoading(false);
+
+        //Actualizando Cookies por lo bajo
+        if (
+          googleDriveFotoIdCookieValue !==
+            misDatosDirectivoData.Google_Drive_Foto_ID ||
+          nombresCookieValue !== misDatosDirectivoData.Nombres ||
+          apellidosCookieValue !== misDatosDirectivoData.Apellidos ||
+          generoCookieValue !== misDatosDirectivoData.Genero
+        ) {
+          fetch("/api/auth/update-cookies", {
+            method: "PUT",
+            body: JSON.stringify({
+              Google_Drive_Foto_ID: misDatosDirectivoData.Google_Drive_Foto_ID,
+              Nombres: misDatosDirectivoData.Nombres,
+              Apellidos: misDatosDirectivoData.Apellidos,
+              Genero: misDatosDirectivoData.Genero,
+            }),
+          });
+        }
+
         // eslint-disable-next-line @typescript-eslint/no-unused-vars
       } catch (e) {
         if (error) {
@@ -405,6 +424,7 @@ const MisDatosDirectivo = ({
                   }}
                   isSomethingLoading={isSomethingLoading}
                   modoEdicion={modoEdicion}
+                  inputType="text"
                   etiqueta="Celular"
                   nombreDato="Celular"
                   modificable

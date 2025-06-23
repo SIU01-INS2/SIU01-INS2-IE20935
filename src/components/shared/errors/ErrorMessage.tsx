@@ -11,7 +11,13 @@ import {
   UserErrorTypes,
   ValidationErrorTypes,
   AuthenticationErrorTypes,
-} from "@/interfaces/shared/apis/errors";
+  NetworkErrorTypes,
+  SyncErrorTypes,
+  CacheErrorTypes,
+  StorageErrorTypes,
+  AttendanceErrorTypes,
+  DataErrorTypes,
+} from "@/interfaces/shared/errors";
 
 interface ErrorMessageProps {
   error: ErrorResponseAPIBase;
@@ -61,7 +67,7 @@ const ErrorMessage = ({
         containerClass: "bg-[#FFF8E6] border-l-4 border-naranja-principal",
         iconBgClass: "bg-naranja-principal text-white",
         icon: WarningIcon,
-        title: "Atención",
+        title: "Validación",
       };
     }
 
@@ -91,7 +97,7 @@ const ErrorMessage = ({
         containerClass: "bg-[#FFF0E6] border-l-4 border-[#FF6B35]",
         iconBgClass: "bg-[#FF6B35] text-white",
         icon: TokenIcon,
-        title: "Autenticación",
+        title: "Token",
       };
     }
 
@@ -101,7 +107,7 @@ const ErrorMessage = ({
         containerClass: "bg-[#FFE6E6] border-l-4 border-[#E53935]",
         iconBgClass: "bg-[#E53935] text-white",
         icon: AuthIcon,
-        title: "Verificación",
+        title: "Autenticación",
       };
     }
 
@@ -142,6 +148,66 @@ const ErrorMessage = ({
         iconBgClass: "bg-rojo-oscuro text-white",
         icon: ErrorIcon,
         title: "Sistema",
+      };
+    }
+
+    // 🆕 Error de red/conectividad - Rojo intenso (crítico)
+    if (Object.values(NetworkErrorTypes).includes(errorType as any)) {
+      return {
+        containerClass: "bg-[#FFE6E6] border-l-4 border-[#D32F2F]",
+        iconBgClass: "bg-[#D32F2F] text-white",
+        icon: NetworkIcon,
+        title: "Conectividad",
+      };
+    }
+
+    // 🆕 Error de sincronización - Azul
+    if (Object.values(SyncErrorTypes).includes(errorType as any)) {
+      return {
+        containerClass: "bg-[#E3F2FD] border-l-4 border-[#1976D2]",
+        iconBgClass: "bg-[#1976D2] text-white",
+        icon: SyncIcon,
+        title: "Sincronización",
+      };
+    }
+
+    // 🆕 Error de cache - Violeta claro
+    if (Object.values(CacheErrorTypes).includes(errorType as any)) {
+      return {
+        containerClass: "bg-[#F3E5F5] border-l-4 border-[#7B1FA2]",
+        iconBgClass: "bg-[#7B1FA2] text-white",
+        icon: CacheIcon,
+        title: "Cache",
+      };
+    }
+
+    // 🆕 Error de almacenamiento - Violeta oscuro
+    if (Object.values(StorageErrorTypes).includes(errorType as any)) {
+      return {
+        containerClass: "bg-[#EDE7F6] border-l-4 border-[#512DA8]",
+        iconBgClass: "bg-[#512DA8] text-white",
+        icon: StorageIcon,
+        title: "Almacenamiento",
+      };
+    }
+
+    // 🆕 Error de asistencia - Verde oscuro
+    if (Object.values(AttendanceErrorTypes).includes(errorType as any)) {
+      return {
+        containerClass: "bg-[#E8F5E8] border-l-4 border-[#388E3C]",
+        iconBgClass: "bg-[#388E3C] text-white",
+        icon: AttendanceIcon,
+        title: "Asistencia",
+      };
+    }
+
+    // 🆕 Error de datos - Azul oscuro
+    if (Object.values(DataErrorTypes).includes(errorType as any)) {
+      return {
+        containerClass: "bg-[#E1F5FE] border-l-4 border-[#0277BD]",
+        iconBgClass: "bg-[#0277BD] text-white",
+        icon: DatabaseIcon,
+        title: "Datos",
       };
     }
 
@@ -213,7 +279,10 @@ const ErrorMessage = ({
   );
 };
 
-// Iconos para diferentes tipos de errores
+// ========================================
+// 🎨 ICONOS EXISTENTES
+// ========================================
+
 const ErrorIcon = ({ className = "" }: { className?: string }) => (
   <svg
     xmlns="http://www.w3.org/2000/svg"
@@ -363,6 +432,112 @@ const RequestIcon = ({ className = "" }: { className?: string }) => (
       strokeLinejoin="round"
       strokeWidth={2}
       d="M4 6h16M4 12h16m-7 6h7"
+    />
+  </svg>
+);
+
+// ========================================
+// 🆕 NUEVOS ICONOS PARA NUEVOS TIPOS DE ERROR
+// ========================================
+
+const NetworkIcon = ({ className = "" }: { className?: string }) => (
+  <svg
+    xmlns="http://www.w3.org/2000/svg"
+    className={className}
+    fill="none"
+    viewBox="0 0 24 24"
+    stroke="currentColor"
+  >
+    <path
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      strokeWidth={2}
+      d="M8.111 16.404a5.5 5.5 0 017.778 0M12 20h.01m-7.08-7.071c3.904-3.905 10.236-3.905 14.141 0M1.394 9.393c5.857-5.857 15.355-5.857 21.213 0"
+    />
+  </svg>
+);
+
+const SyncIcon = ({ className = "" }: { className?: string }) => (
+  <svg
+    xmlns="http://www.w3.org/2000/svg"
+    className={className}
+    fill="none"
+    viewBox="0 0 24 24"
+    stroke="currentColor"
+  >
+    <path
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      strokeWidth={2}
+      d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"
+    />
+  </svg>
+);
+
+const CacheIcon = ({ className = "" }: { className?: string }) => (
+  <svg
+    xmlns="http://www.w3.org/2000/svg"
+    className={className}
+    fill="none"
+    viewBox="0 0 24 24"
+    stroke="currentColor"
+  >
+    <path
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      strokeWidth={2}
+      d="M5 12h14M5 12a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v4a2 2 0 01-2 2M5 12a2 2 0 00-2 2v4a2 2 0 002 2h14a2 2 0 002-2v-4a2 2 0 00-2-2m-2-4h.01M17 16h.01"
+    />
+  </svg>
+);
+
+const StorageIcon = ({ className = "" }: { className?: string }) => (
+  <svg
+    xmlns="http://www.w3.org/2000/svg"
+    className={className}
+    fill="none"
+    viewBox="0 0 24 24"
+    stroke="currentColor"
+  >
+    <path
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      strokeWidth={2}
+      d="M4 7v10c0 2.21 3.582 4 8 4s8-1.79 8-4V7M4 7c0 2.21 3.582 4 8 4s8-1.79 8-4M4 7c0-2.21 3.582-4 8-4s8 1.79 8 4m0 5c0 2.21-3.582 4-8 4s-8-1.79-8-4"
+    />
+  </svg>
+);
+
+const AttendanceIcon = ({ className = "" }: { className?: string }) => (
+  <svg
+    xmlns="http://www.w3.org/2000/svg"
+    className={className}
+    fill="none"
+    viewBox="0 0 24 24"
+    stroke="currentColor"
+  >
+    <path
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      strokeWidth={2}
+      d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"
+    />
+  </svg>
+);
+
+const DatabaseIcon = ({ className = "" }: { className?: string }) => (
+  <svg
+    xmlns="http://www.w3.org/2000/svg"
+    className={className}
+    fill="none"
+    viewBox="0 0 24 24"
+    stroke="currentColor"
+  >
+    <path
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      strokeWidth={2}
+      d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"
     />
   </svg>
 );

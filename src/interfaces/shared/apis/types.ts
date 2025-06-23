@@ -1,5 +1,6 @@
-import AllErrorTypes from "./errors";
-import { ErrorDetails } from "./errors/details";
+import AllErrorTypes from "../errors";
+import { ErrorDetails } from "../errors/details";
+
 
 export interface MessageProperty {
   message: string;

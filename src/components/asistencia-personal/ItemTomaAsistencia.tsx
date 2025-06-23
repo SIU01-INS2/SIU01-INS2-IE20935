@@ -9,7 +9,7 @@ import { useState } from "react";
 import { CANTIDAD_MINUTOS_MAXIMO_PARA_DESCARTAR_ASISTENCIA_DE_PERSONAL } from "@/constants/CANTIDAD_MINUTOS_MAXIMO_PARA_DESCARTE_ASISTENCIAS";
 
 export interface PersonalParaTomarAsistencia {
-  DNI: string;
+  ID_o_DNI: string;
   GoogleDriveFotoId: string | null;
   Nombres: string;
   Apellidos: string;
@@ -62,7 +62,7 @@ const ItemTomaAsistencia = ({
       return false;
     }
 
-    // 🔧 CORREGIR ZONA HORARIA: Aplicar offset de Perú (-5 horas = -5 * 60 * 60 * 1000 ms)
+    // 🔧 RESTAURAR: Aplicar offset de Perú (-5 horas = -5 * 60 * 60 * 1000 ms)
     const OFFSET_PERU_MS = 5 * 60 * 60 * 1000;
     const timestampAsistenciaCorregido = detalles.Timestamp + OFFSET_PERU_MS;
 
@@ -79,6 +79,10 @@ const ItemTomaAsistencia = ({
       puedeEliminar:
         tiempoTranscurridoMinutos <=
         CANTIDAD_MINUTOS_MAXIMO_PARA_DESCARTAR_ASISTENCIA_DE_PERSONAL,
+      fechaActual: new Date(timestampActual).toLocaleString("es-PE"),
+      fechaAsistencia: new Date(timestampAsistenciaCorregido).toLocaleString(
+        "es-PE"
+      ),
     });
 
     return (
@@ -103,7 +107,7 @@ const ItemTomaAsistencia = ({
       return 0;
     }
 
-    // 🔧 CORREGIR ZONA HORARIA: Aplicar offset de Perú (-5 horas = -5 * 60 * 60 * 1000 ms)
+    // 🔧 RESTAURAR: Aplicar offset de Perú
     const OFFSET_PERU_MS = 5 * 60 * 60 * 1000;
     const timestampAsistenciaCorregido = detalles.Timestamp + OFFSET_PERU_MS;
 

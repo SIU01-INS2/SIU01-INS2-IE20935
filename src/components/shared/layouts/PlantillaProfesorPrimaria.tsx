@@ -27,7 +27,9 @@ const PlantillaProfesorPrimaria = ({
         Rol={RolesSistema.ProfesorPrimaria}
         Google_Drive_Foto_ID={Google_Drive_Foto_ID}
       />
-      {children}
+      <main className="-border-2 border-black flex-1 h-full py-4 px-8 flex items-center justify-center">
+        {children}
+      </main>
 
       <MarcarAsistenciaDePersonalButton rol={RolesSistema.ProfesorPrimaria} />
       <NavBarFooter Rol={RolesSistema.ProfesorPrimaria} />

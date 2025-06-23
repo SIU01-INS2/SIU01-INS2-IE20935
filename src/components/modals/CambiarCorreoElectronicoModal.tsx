@@ -10,14 +10,15 @@ import {
   ErrorResponseAPIBase,
 } from "@/interfaces/shared/apis/types";
 import { CambiarCorreoSuccessResponse } from "@/interfaces/shared/apis/api01/mis-datos/cambiar-correo/types";
-import {
-  ValidationErrorTypes,
-  RequestErrorTypes,
-  TokenErrorTypes,
-  AuthenticationErrorTypes,
-} from "@/interfaces/shared/apis/errors";
+
 import ErrorMessage from "../shared/errors/ErrorMessage";
 import InformationIcon from "../icons/InformationIcon";
+import {
+  AuthenticationErrorTypes,
+  RequestErrorTypes,
+  TokenErrorTypes,
+  ValidationErrorTypes,
+} from "@/interfaces/shared/errors";
 
 interface CambioCorreoModalProps
   extends Pick<ModalContainerProps, "eliminateModal"> {
@@ -57,13 +58,14 @@ const CambioCorreoModal = ({
 
   // Estado para contar los intentos fallidos
   const [attempts, setAttempts] = useState<number>(0);
-  
+
   // Estado para controlar si se han excedido los intentos máximos
-  const [maxAttemptsExceeded, setMaxAttemptsExceeded] = useState<boolean>(false);
+  const [maxAttemptsExceeded, setMaxAttemptsExceeded] =
+    useState<boolean>(false);
 
   // Referencia para el intervalo del temporizador
   const timerIntervalRef = useRef<NodeJS.Timeout | null>(null);
-  
+
   // Referencia para el timeout de cierre por máximos intentos
   const maxAttemptsTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
@@ -141,7 +143,7 @@ const CambioCorreoModal = ({
 
       // Iniciar el contador inmediatamente
       updateTimeRemaining(expirationTime);
-      
+
       // Reiniciar contador de intentos y estado de intentos máximos al cambiar a pantalla de código
       setAttempts(0);
       setMaxAttemptsExceeded(false);
@@ -205,39 +207,39 @@ const CambioCorreoModal = ({
         // Incrementar el contador de intentos fallidos
         const newAttempts = attempts + 1;
         setAttempts(newAttempts);
-        
+
         // Verificar si se ha excedido el número máximo de intentos
         if (newAttempts >= MAX_ATTEMPTS) {
           // Marcar que se han excedido los intentos máximos
           setMaxAttemptsExceeded(true);
-          
+
           const maxAttemptsError: ErrorResponseAPIBase = {
             message: `Has excedido el número máximo de intentos (${MAX_ATTEMPTS}). El proceso será cancelado.`,
             success: false,
             errorType: AuthenticationErrorTypes.MAX_ATTEMPTS_EXCEEDED,
-            details: { maxAttempts: MAX_ATTEMPTS }
+            details: { maxAttempts: MAX_ATTEMPTS },
           };
-          
+
           setError(maxAttemptsError);
-          
+
           // Establecer un temporizador para cerrar el modal después de mostrar el error
           if (maxAttemptsTimeoutRef.current) {
             clearTimeout(maxAttemptsTimeoutRef.current);
           }
-          
+
           maxAttemptsTimeoutRef.current = setTimeout(() => {
             // Cerrar el modal
             eliminateModal();
           }, ERROR_DISPLAY_TIME);
-          
+
           setIsSomethingLoading(false);
           return;
         }
-        
+
         setIsSomethingLoading(false);
         return setError({
-          ...responseJson as ErrorResponseAPIBase,
-          message: `Código incorrecto. Intento ${newAttempts} de ${MAX_ATTEMPTS}.`
+          ...(responseJson as ErrorResponseAPIBase),
+          message: `Código incorrecto. Intento ${newAttempts} de ${MAX_ATTEMPTS}.`,
         });
       }
 
@@ -318,7 +320,7 @@ const CambioCorreoModal = ({
         clearInterval(timerIntervalRef.current);
         timerIntervalRef.current = null;
       }
-      
+
       if (maxAttemptsTimeoutRef.current) {
         clearTimeout(maxAttemptsTimeoutRef.current);
         maxAttemptsTimeoutRef.current = null;
@@ -436,7 +438,7 @@ const CambioCorreoModal = ({
                   <span className="font-semibold">{timeRemaining}</span>
                 </p>
               )}
-              
+
               {attempts > 0 && !maxAttemptsExceeded && (
                 <p className="text-center text-xs text-amber-600 mb-1 font-medium">
                   Intento {attempts} de {MAX_ATTEMPTS}
@@ -476,7 +478,9 @@ const CambioCorreoModal = ({
                 IconTSX={<></>}
                 isSomethingLoading={isSomethingLoading}
                 titleDisabled="Verificando código..."
-                LoaderTSX={<Loader className="w-[1.3rem] p-[0.25rem] bg-negro" />}
+                LoaderTSX={
+                  <Loader className="w-[1.3rem] p-[0.25rem] bg-negro" />
+                }
                 texto={isSomethingLoading ? "Verificando" : "Aceptar"}
                 typeButton="submit"
                 className={`font-semibold w-max gap-3 px-4 py-2 rounded-md text-center text-base ${

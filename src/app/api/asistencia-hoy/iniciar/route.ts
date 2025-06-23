@@ -5,7 +5,10 @@ import { LogoutTypes, ErrorDetailsForLogout } from "@/interfaces/LogoutTypes";
 import { verifyAuthToken } from "@/lib/utils/backend/auth/functions/jwtComprobations";
 import { redirectToLogin } from "@/lib/utils/backend/auth/functions/redirectToLogin";
 import { redisClient } from "../../../../../config/Redis/RedisClient";
-import { obtenerFechaActualPeru } from "../../_helpers/obtenerFechaActualPeru";
+import {
+  obtenerFechaActualPeru,
+  obtenerFechaHoraActualPeru,
+} from "../../_helpers/obtenerFechaActualPeru";
 import {
   NOMBRE_BANDERA_INICIO_TOMA_ASISTENCIA_PERSONAL,
   NOMBRE_BANDERA_INICIO_TOMA_ASISTENCIA_PRIMARIA,
@@ -19,37 +22,27 @@ import {
 
 /**
  * Calcula los segundos que faltan hasta las 23:59:59 del día actual en hora peruana
+ * Ahora usa la función mejorada que maneja offsets automáticamente
  * @returns Segundos hasta el final del día en Perú
  */
 function calcularSegundosHastaFinDiaPeru(): number {
-  // Obtener fecha y hora actual en UTC
-  const fechaUTC = new Date();
+  // ✅ Usar la nueva función que maneja todos los offsets automáticamente
+  const fechaActualPeru = obtenerFechaHoraActualPeru();
 
-  // Crear una nueva fecha que represente las 23:59:59 en Perú el día actual
-  // Para esto, usamos la fecha UTC y ajustamos manualmente la hora a 23:59:59 en zona horaria peruana (UTC-5)
-  // Por lo tanto, en UTC esto sería 04:59:59 del día siguiente
-  // Primero obtenemos la fecha actual en Perú para saber de qué día estamos hablando
-  const offsetPeruHoras = -5;
-  const fechaPeruanaActual = new Date(
-    fechaUTC.getTime() + offsetPeruHoras * 60 * 60 * 1000
-  );
-  const fechaPeruanaStr = fechaPeruanaActual.toISOString().split("T")[0];
-
-  // Ahora creamos la fecha que representa las 23:59:59 en hora peruana de ese mismo día
-  // Esto es UTC 04:59:59 del día siguiente si no estamos cerca del cambio de día
-  const finDiaPeruanoEnUTC = new Date(`${fechaPeruanaStr}T23:59:59.999-05:00`);
+  // Crear una fecha que represente las 23:59:59 del mismo día en Perú
+  const finDiaPeruano = new Date(fechaActualPeru);
+  finDiaPeruano.setHours(23, 59, 59, 999);
 
   // Calcular diferencia en segundos
   const segundosRestantes = Math.floor(
-    (finDiaPeruanoEnUTC.getTime() - fechaUTC.getTime()) / 1000
+    (finDiaPeruano.getTime() - fechaActualPeru.getTime()) / 1000
   );
 
-  // Log para depuración
-  console.log(`Fecha UTC actual: ${fechaUTC.toISOString()}`);
-  console.log(`Fecha peruana calculada: ${fechaPeruanaActual.toISOString()}`);
+  // Log para depuración (manteniendo la información útil)
   console.log(
-    `Fin del día peruano en UTC: ${finDiaPeruanoEnUTC.toISOString()}`
+    `Fecha actual Perú (con offsets): ${fechaActualPeru.toISOString()}`
   );
+  console.log(`Fin del día peruano: ${finDiaPeruano.toISOString()}`);
   console.log(`Segundos restantes calculados: ${segundosRestantes}`);
 
   // Asegurar que devolvemos al menos 1 segundo y como máximo un día
@@ -92,9 +85,17 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // Obtener la fecha actual en Perú
+    // ✅ Obtener la fecha actual en Perú usando ambas funciones
+    // La función original sigue funcionando para retrocompatibilidad
     const fechaActualPeru = obtenerFechaActualPeru();
     const [anio, mes, dia] = fechaActualPeru.split("-").map(Number);
+
+    // ✅ También podemos obtener la fecha/hora completa para logs adicionales si es necesario
+    const fechaHoraCompletaPeru = obtenerFechaHoraActualPeru();
+    console.log(
+      `📅 Fecha completa Perú (con offsets): ${fechaHoraCompletaPeru.toISOString()}`
+    );
+    console.log(`📅 Fecha string Perú: ${fechaActualPeru}`);
 
     // Determinar la key correcta en Redis según el TipoAsistencia
     let redisKey;
@@ -117,14 +118,14 @@ export async function POST(req: NextRequest) {
         );
     }
 
-    // Calcular segundos hasta el final del día en Perú
+    // ✅ Calcular segundos hasta el final del día usando la función mejorada
     const segundosHastaFinDia = calcularSegundosHastaFinDiaPeru();
 
     console.log(
-      `Estableciendo bandera con expiración de ${segundosHastaFinDia} segundos (hasta las 23:59:59 hora peruana)`
+      `⏰ Estableciendo bandera con expiración de ${segundosHastaFinDia} segundos (hasta las 23:59:59 hora peruana)`
     );
     console.log(
-      `En tiempo legible: ${Math.floor(
+      `⏰ En tiempo legible: ${Math.floor(
         segundosHastaFinDia / 3600
       )}h ${Math.floor((segundosHastaFinDia % 3600) / 60)}m ${
         segundosHastaFinDia % 60
@@ -135,8 +136,11 @@ export async function POST(req: NextRequest) {
     const redisClientInstance = redisClient(tipoAsistencia);
 
     // Almacenar en Redis con expiración al final del día peruano
-    const valorGuardado = await redisClientInstance.set(redisKey, "true", 
-     segundosHastaFinDia    );
+    const valorGuardado = await redisClientInstance.set(
+      redisKey,
+      "true",
+      segundosHastaFinDia
+    );
 
     if (valorGuardado !== "OK") {
       return NextResponse.json(

@@ -15,7 +15,7 @@ import {
   ValidationErrorTypes,
   FileErrorTypes,
   RequestErrorTypes,
-} from "@/interfaces/shared/apis/errors";
+} from "@/interfaces/shared/errors";
 import ErrorMessage from "../shared/errors/ErrorMessage";
 
 interface CambiarFotoModalProps

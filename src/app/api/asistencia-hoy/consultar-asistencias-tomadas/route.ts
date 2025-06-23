@@ -18,6 +18,8 @@ import { EstadosAsistencia } from "@/interfaces/shared/EstadosAsistenciaEstudian
  */
 const mapearRolAActorPersonal = (rol: RolesSistema): ActoresSistema | null => {
   switch (rol) {
+    case RolesSistema.Directivo:
+      return ActoresSistema.Directivo; // ✅ CORREGIDO: Directivos SÍ tienen asistencia personal
     case RolesSistema.ProfesorPrimaria:
       return ActoresSistema.ProfesorPrimaria;
     case RolesSistema.ProfesorSecundaria:
@@ -27,8 +29,7 @@ const mapearRolAActorPersonal = (rol: RolesSistema): ActoresSistema | null => {
       return ActoresSistema.Auxiliar;
     case RolesSistema.PersonalAdministrativo:
       return ActoresSistema.PersonalAdministrativo;
-    // Directivos y Responsables no tienen asistencia personal
-    case RolesSistema.Directivo:
+    // Solo Responsables no tienen asistencia personal
     case RolesSistema.Responsable:
       return null;
     default:
@@ -41,22 +42,34 @@ const validarPermisos = (
   rol: RolesSistema,
   actor: ActoresSistema,
   tipoAsistencia: TipoAsistencia,
-  dniConsulta: string | null,
-  miDNI: string,
-  esConsultaPropia: boolean = false, // ✅ NUEVO: indica si es consulta propia
+  idODniConsulta: string | null,
+  miIdODni: string,
+  esConsultaPropia: boolean = false,
   grado?: string | null,
   seccion?: string | null,
   nivelEducativo?: string | null
 ): { esValido: boolean; mensaje?: string } => {
   switch (rol) {
     case RolesSistema.Directivo:
-      // Sin restricciones para consultas de otros
-      if (!esConsultaPropia) return { esValido: true };
-      // Los directivos no tienen asistencia personal
-      return {
-        esValido: false,
-        mensaje: "Los directivos no tienen registro de asistencia personal",
-      };
+      // ✅ ACTUALIZADO: Los directivos pueden consultar asistencias de personal (incluida la suya)
+      // PERO NO pueden consultar asistencias de estudiantes
+      if (actor === ActoresSistema.Estudiante) {
+        return {
+          esValido: false,
+          mensaje:
+            "Los directivos no pueden consultar asistencias de estudiantes",
+        };
+      }
+
+      // Para personal: pueden consultar cualquier personal (incluida la suya propia)
+      if (tipoAsistencia !== TipoAsistencia.ParaPersonal) {
+        return {
+          esValido: false,
+          mensaje:
+            "Los directivos solo pueden consultar asistencias de personal",
+        };
+      }
+      return { esValido: true };
 
     case RolesSistema.Auxiliar:
       if (actor === ActoresSistema.Estudiante) {
@@ -77,14 +90,22 @@ const validarPermisos = (
           };
         }
       } else {
-        // ✅ Para asistencia personal: si es consulta propia, permitir sin DNI
+        // Para asistencia personal: si es consulta propia, permitir sin ID_o_DNI
         if (esConsultaPropia) return { esValido: true };
-        // Para consulta de otros, verificar que sea su propio DNI
-        if (!dniConsulta || dniConsulta !== miDNI) {
+        // Para consulta de otros, verificar que sea su propio ID_o_DNI
+        if (!idODniConsulta || idODniConsulta !== miIdODni) {
           return {
             esValido: false,
             mensaje:
               "Los auxiliares solo pueden consultar su propia asistencia de personal",
+          };
+        }
+        // Debe ser tipo Personal
+        if (tipoAsistencia !== TipoAsistencia.ParaPersonal) {
+          return {
+            esValido: false,
+            mensaje:
+              "Los auxiliares solo pueden consultar asistencia de tipo Personal",
           };
         }
       }
@@ -109,14 +130,22 @@ const validarPermisos = (
           };
         }
       } else {
-        // ✅ Para asistencia personal: si es consulta propia, permitir sin DNI
+        // Para asistencia personal: si es consulta propia, permitir sin ID_o_DNI
         if (esConsultaPropia) return { esValido: true };
-        // Para consulta de otros, verificar que sea su propio DNI
-        if (!dniConsulta || dniConsulta !== miDNI) {
+        // Para consulta de otros, verificar que sea su propio ID_o_DNI
+        if (!idODniConsulta || idODniConsulta !== miIdODni) {
           return {
             esValido: false,
             mensaje:
               "Los profesores de primaria solo pueden consultar su propia asistencia de personal",
+          };
+        }
+        // Debe ser tipo Personal
+        if (tipoAsistencia !== TipoAsistencia.ParaPersonal) {
+          return {
+            esValido: false,
+            mensaje:
+              "Los profesores de primaria solo pueden consultar asistencia de tipo Personal",
           };
         }
       }
@@ -130,14 +159,22 @@ const validarPermisos = (
             "Los profesores de secundaria no pueden consultar asistencias de estudiantes",
         };
       } else {
-        // ✅ Para asistencia personal: si es consulta propia, permitir sin DNI
+        // Para asistencia personal: si es consulta propia, permitir sin ID_o_DNI
         if (esConsultaPropia) return { esValido: true };
-        // Para consulta de otros, verificar que sea su propio DNI
-        if (!dniConsulta || dniConsulta !== miDNI) {
+        // Para consulta de otros, verificar que sea su propio ID_o_DNI
+        if (!idODniConsulta || idODniConsulta !== miIdODni) {
           return {
             esValido: false,
             mensaje:
               "Los profesores de secundaria solo pueden consultar su propia asistencia",
+          };
+        }
+        // Debe ser tipo Personal
+        if (tipoAsistencia !== TipoAsistencia.ParaPersonal) {
+          return {
+            esValido: false,
+            mensaje:
+              "Los profesores de secundaria solo pueden consultar asistencia de tipo Personal",
           };
         }
       }
@@ -162,14 +199,22 @@ const validarPermisos = (
           };
         }
       } else {
-        // ✅ Para asistencia personal: si es consulta propia, permitir sin DNI
+        // Para asistencia personal: si es consulta propia, permitir sin ID_o_DNI
         if (esConsultaPropia) return { esValido: true };
-        // Para consulta de otros, verificar que sea su propio DNI
-        if (!dniConsulta || dniConsulta !== miDNI) {
+        // Para consulta de otros, verificar que sea su propio ID_o_DNI
+        if (!idODniConsulta || idODniConsulta !== miIdODni) {
           return {
             esValido: false,
             mensaje:
               "Los tutores solo pueden consultar su propia asistencia de personal",
+          };
+        }
+        // Debe ser tipo Personal
+        if (tipoAsistencia !== TipoAsistencia.ParaPersonal) {
+          return {
+            esValido: false,
+            mensaje:
+              "Los tutores solo pueden consultar asistencia de tipo Personal",
           };
         }
       }
@@ -183,14 +228,22 @@ const validarPermisos = (
             "El personal administrativo no puede consultar asistencias de estudiantes",
         };
       } else {
-        // ✅ Para asistencia personal: si es consulta propia, permitir sin DNI
+        // Para asistencia personal: si es consulta propia, permitir sin ID_o_DNI
         if (esConsultaPropia) return { esValido: true };
-        // Para consulta de otros, verificar que sea su propio DNI
-        if (!dniConsulta || dniConsulta !== miDNI) {
+        // Para consulta de otros, verificar que sea su propio ID_o_DNI
+        if (!idODniConsulta || idODniConsulta !== miIdODni) {
           return {
             esValido: false,
             mensaje:
               "El personal administrativo solo puede consultar su propia asistencia",
+          };
+        }
+        // Debe ser tipo Personal
+        if (tipoAsistencia !== TipoAsistencia.ParaPersonal) {
+          return {
+            esValido: false,
+            mensaje:
+              "El personal administrativo solo puede consultar asistencia de tipo Personal",
           };
         }
       }
@@ -212,12 +265,12 @@ const validarPermisos = (
             "Los responsables solo pueden consultar asistencias de estudiantes",
         };
       }
-      // Solo consultas unitarias (DNI obligatorio)
-      if (!dniConsulta) {
+      // Solo consultas unitarias (ID_o_DNI obligatorio)
+      if (!idODniConsulta) {
         return {
           esValido: false,
           mensaje:
-            "Los responsables deben especificar el DNI del estudiante a consultar",
+            "Los responsables deben especificar el ID_o_DNI del estudiante a consultar",
         };
       }
       return { esValido: true };
@@ -242,23 +295,24 @@ export async function GET(req: NextRequest) {
 
     if (error && !rol && !decodedToken) return error;
 
-    const MI_DNI = decodedToken.ID_Usuario;
+    const MI_ID_O_DNI = decodedToken.ID_Usuario; // ✅ ACTUALIZADO: Para directivos: ID, para otros: DNI
 
     // Obtener parámetros de la consulta
     const searchParams = req.nextUrl.searchParams;
-    const actorParam = searchParams.get("Actor"); // ✅ AHORA ES OPCIONAL
+    const actorParam = searchParams.get("Actor"); // ✅ OPCIONAL
     const modoRegistroParam = searchParams.get("ModoRegistro");
     const tipoAsistenciaParam = searchParams.get(
       "TipoAsistencia"
     ) as TipoAsistencia;
-    const dniParam = searchParams.get("DNI"); // Opcional
+    const idODniParam = searchParams.get("ID_o_DNI"); // ✅ ACTUALIZADO: Era "DNI"
     const gradoParam = searchParams.get("Grado"); // Opcional
     const seccionParam = searchParams.get("Seccion"); // Opcional
     const nivelEducativoParam = searchParams.get("NivelEducativo"); // Opcional
 
-    // ✅ LÓGICA NUEVA: Detectar si es consulta propia
+    // ✅ LÓGICA: Detectar si es consulta propia
     const esConsultaPropia = !actorParam;
     let actor: ActoresSistema;
+    let tipoAsistenciaFinal: TipoAsistencia;
 
     if (esConsultaPropia) {
       // Si no se envía Actor, es consulta propia - mapear rol a actor
@@ -267,12 +321,13 @@ export async function GET(req: NextRequest) {
         return NextResponse.json(
           {
             success: false,
-            message: `El rol ${rol} no tiene asistencia personal registrable`,
+            message: `El rol ${rol} no tiene asistencia personal consultable`,
           },
           { status: 400 }
         );
       }
       actor = actorMapeado;
+      tipoAsistenciaFinal = TipoAsistencia.ParaPersonal; // ✅ Siempre Personal para consulta propia
       console.log(`🔍 Consulta propia detectada: ${rol} → ${actor}`);
     } else {
       // Validar que Actor sea válido para consulta de otros
@@ -285,14 +340,26 @@ export async function GET(req: NextRequest) {
         );
       }
       actor = actorParam as ActoresSistema;
+
+      // Para consulta de otros, TipoAsistencia es obligatorio
+      if (!tipoAsistenciaParam) {
+        return NextResponse.json(
+          {
+            success: false,
+            message: "TipoAsistencia es requerido para consulta de otros",
+          },
+          { status: 400 }
+        );
+      }
+      tipoAsistenciaFinal = tipoAsistenciaParam;
     }
 
     // Validar parámetros obligatorios
-    if (!modoRegistroParam || !tipoAsistenciaParam) {
+    if (!modoRegistroParam) {
       return NextResponse.json(
         {
           success: false,
-          message: "Se requieren los parámetros ModoRegistro y TipoAsistencia",
+          message: "Se requiere el parámetro ModoRegistro",
         },
         { status: 400 }
       );
@@ -311,31 +378,31 @@ export async function GET(req: NextRequest) {
       );
     }
 
-    // Validar que TipoAsistencia sea válido
-    if (
-      !Object.values(TipoAsistencia).includes(
-        tipoAsistenciaParam as TipoAsistencia
-      )
-    ) {
-      return NextResponse.json(
-        {
-          success: false,
-          message: "El TipoAsistencia proporcionado no es válido",
-        },
-        { status: 400 }
-      );
+    // Validar que TipoAsistencia sea válido (solo para consulta de otros)
+    if (!esConsultaPropia) {
+      if (
+        !Object.values(TipoAsistencia).includes(
+          tipoAsistenciaFinal as TipoAsistencia
+        )
+      ) {
+        return NextResponse.json(
+          {
+            success: false,
+            message: "El TipoAsistencia proporcionado no es válido",
+          },
+          { status: 400 }
+        );
+      }
     }
-
-    const tipoAsistencia = tipoAsistenciaParam;
 
     // ✅ VALIDAR PERMISOS con nueva lógica
     const validacionPermisos = validarPermisos(
       rol!,
       actor,
-      tipoAsistencia,
-      dniParam,
-      MI_DNI,
-      esConsultaPropia, // ✅ NUEVO parámetro
+      tipoAsistenciaFinal,
+      idODniParam,
+      MI_ID_O_DNI,
+      esConsultaPropia,
       gradoParam,
       seccionParam,
       nivelEducativoParam
@@ -356,19 +423,19 @@ export async function GET(req: NextRequest) {
 
     // ✅ CREAR PATRÓN DE BÚSQUEDA con lógica mejorada
     let patronBusqueda: string;
-    const dniParaBusqueda = esConsultaPropia ? MI_DNI : dniParam;
+    const idODniParaBusqueda = esConsultaPropia ? MI_ID_O_DNI : idODniParam;
 
-    if (dniParaBusqueda) {
-      // Consulta unitaria por DNI específico (propio o de otro)
+    if (idODniParaBusqueda) {
+      // Consulta unitaria por ID_o_DNI específico (propio o de otro)
       if (
         actor === ActoresSistema.Estudiante &&
         nivelEducativoParam &&
         gradoParam &&
         seccionParam
       ) {
-        patronBusqueda = `${fechaActualPeru}:${modoRegistroParam}:${actor}:${dniParaBusqueda}:${nivelEducativoParam}:${gradoParam}:${seccionParam}`;
+        patronBusqueda = `${fechaActualPeru}:${modoRegistroParam}:${actor}:${idODniParaBusqueda}:${nivelEducativoParam}:${gradoParam}:${seccionParam}`;
       } else {
-        patronBusqueda = `${fechaActualPeru}:${modoRegistroParam}:${actor}:${dniParaBusqueda}`;
+        patronBusqueda = `${fechaActualPeru}:${modoRegistroParam}:${actor}:${idODniParaBusqueda}`;
       }
     } else if (
       nivelEducativoParam &&
@@ -390,11 +457,11 @@ export async function GET(req: NextRequest) {
     );
 
     // Obtener la instancia de Redis correspondiente
-    const redisClientInstance = redisClient(tipoAsistencia);
+    const redisClientInstance = redisClient(tipoAsistenciaFinal);
 
     // Buscar claves
     let claves: string[];
-    if (dniParaBusqueda) {
+    if (idODniParaBusqueda) {
       // Para consulta unitaria, verificar si existe la clave específica
       const existe = await redisClientInstance.exists(patronBusqueda);
       claves = existe ? [patronBusqueda] : [];
@@ -414,7 +481,7 @@ export async function GET(req: NextRequest) {
       if (valor) {
         const partes = clave.split(":");
         if (partes.length >= 4) {
-          const dni = partes[3];
+          const idODni = partes[3]; // ✅ ACTUALIZADO: Puede ser ID o DNI
 
           if (actor === ActoresSistema.Estudiante) {
             // Para estudiantes
@@ -425,7 +492,7 @@ export async function GET(req: NextRequest) {
               )
             ) {
               resultados.push({
-                DNI: dni,
+                ID_o_DNI: idODni, // ✅ ACTUALIZADO: Era "DNI"
                 AsistenciaMarcada: true,
                 Detalles: {
                   Estado: valor as EstadosAsistencia,
@@ -439,7 +506,7 @@ export async function GET(req: NextRequest) {
               const desfaseSegundos = parseInt(valor[1] as string);
 
               resultados.push({
-                DNI: dni,
+                ID_o_DNI: idODni, // ✅ ACTUALIZADO: Era "DNI"
                 AsistenciaMarcada: true,
                 Detalles: {
                   Timestamp: timestamp,
@@ -460,7 +527,8 @@ export async function GET(req: NextRequest) {
       Dia: Number(fechaActualPeru.split("-")[2]),
       Mes: Number(fechaActualPeru.split("-")[1]) as Meses,
       ModoRegistro: modoRegistroParam as ModoRegistro,
-      Resultados: dniParaBusqueda ? resultados[0] || null : resultados, // Unitario vs múltiple
+      TipoAsistencia: tipoAsistenciaFinal, // ✅ AGREGADO: Para claridad
+      Resultados: idODniParaBusqueda ? resultados[0] || null : resultados, // Unitario vs múltiple
     };
 
     return NextResponse.json(respuesta, { status: 200 });

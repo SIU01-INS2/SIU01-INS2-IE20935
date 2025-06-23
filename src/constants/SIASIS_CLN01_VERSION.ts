@@ -1,1 +1,1 @@
-export const SIASIS_CLN01_VERSION = "3.0.0";
+export const SIASIS_CLN01_VERSION = "4.1.0";

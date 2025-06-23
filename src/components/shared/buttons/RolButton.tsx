@@ -11,7 +11,7 @@ export type LabelEntradaSalida = "Entrada" | "Salida";
 export interface RolBotonProps {
   label: RolForLoginSelection | LabelEntradaSalida;
   icon: React.ReactNode;
-  className: string;
+  className?: string;
   onClick: () => void;
 }
 

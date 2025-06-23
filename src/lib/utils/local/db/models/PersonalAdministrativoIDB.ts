@@ -14,7 +14,7 @@ import AllErrorTypes, {
   DataConflictErrorTypes,
   SystemErrorTypes,
   UserErrorTypes,
-} from "../../../../../interfaces/shared/apis/errors";
+} from "../../../../../interfaces/shared/errors";
 import { SiasisAPIS } from "@/interfaces/shared/SiasisComponents";
 import comprobarSincronizacionDeTabla from "@/lib/helpers/validations/comprobarSincronizacionDeTabla";
 import fetchSiasisApiGenerator from "@/lib/helpers/generators/fetchSiasisApisGenerator";

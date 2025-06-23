@@ -14,7 +14,7 @@ import { validateDNI } from "@/lib/helpers/validators/data/validateDNI";
 import {
   RequestErrorTypes,
   SystemErrorTypes,
-} from "@/interfaces/shared/apis/errors";
+} from "@/interfaces/shared/errors";
 
 // Función para validar permisos según rol
 const validarPermisosEliminacion = (
@@ -160,7 +160,7 @@ export async function DELETE(req: NextRequest) {
     const body = (await req.json()) as EliminarAsistenciaRequestBody;
 
     const {
-      DNI,
+      ID_o_DNI,
       Actor,
       ModoRegistro,
       TipoAsistencia: tipoAsistencia,
@@ -171,8 +171,9 @@ export async function DELETE(req: NextRequest) {
     } = body;
 
     // Validar DNI
-    const dniValidation = validateDNI(DNI, true);
-    if (!dniValidation.isValid) {
+    const dniValidation = validateDNI(ID_o_DNI, true);
+    //El directivo tendra ID
+    if (!dniValidation.isValid && Actor !== ActoresSistema.Directivo) {
       return NextResponse.json(
         {
           success: false,
@@ -277,7 +278,7 @@ export async function DELETE(req: NextRequest) {
           fechaEliminacion,
           ModoRegistro,
           Actor,
-          DNI,
+          ID_o_DNI,
           NivelEducativo,
           Grado,
           Seccion
@@ -289,7 +290,7 @@ export async function DELETE(req: NextRequest) {
           fechaEliminacion,
           ModoRegistro,
           Actor,
-          DNI
+          ID_o_DNI
         );
       }
     } else {
@@ -298,7 +299,7 @@ export async function DELETE(req: NextRequest) {
         fechaEliminacion,
         ModoRegistro,
         Actor,
-        DNI
+        ID_o_DNI
       );
     }
 

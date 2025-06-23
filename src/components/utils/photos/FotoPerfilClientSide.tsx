@@ -13,8 +13,7 @@ const FotoPerfilClientSide = ({
   return (
     // eslint-disable-next-line @next/next/no-img-element
     <img
-      style={{ boxShadow: "0 0px 8px rgba(0, 0, 0, 0.2)" }}
-      className={`${NOMBRE_CLASE_IMAGENES_FOTO_PERFIL_USUARIO} aspect-square w-12 overflow-hidden max-md:mr-2 rounded-[50%] border border-[#ffffff60] bg-contain object-cover bg-no-repeat bg-center ${className}`}
+      className={`${NOMBRE_CLASE_IMAGENES_FOTO_PERFIL_USUARIO} aspect-square w-12 overflow-hidden max-md:mr-2 rounded-[50%] border border-[#ffffff60] object-cover object-[center_20%] shadow-[0_0_8px_rgba(0,0,0,0.2)] ${className}`}
       src={
         Google_Drive_Foto_ID
           ? `https://drive.google.com/thumbnail?id=${Google_Drive_Foto_ID}`

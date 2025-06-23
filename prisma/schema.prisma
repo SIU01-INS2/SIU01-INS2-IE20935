@@ -19,6 +19,11 @@ model T_Directivos {
   Contraseña          String  @db.Text
   Google_Drive_Foto_ID String? @db.Text
 
+  // Nuevas relaciones con directivos
+  horarios_por_dias T_Horarios_Por_Dias_Directivos[]
+  registros_entrada T_Control_Entrada_Mensual_Directivos[]
+  registros_salida  T_Control_Salida_Mensual_Directivos[]
+
   @@map("T_Directivos")
 }
 
@@ -118,7 +123,7 @@ model T_Aulas {
   profesor_primaria       T_Profesores_Primaria?   @relation(fields: [DNI_Profesor_Primaria], references: [DNI_Profesor_Primaria])
   profesor_secundaria     T_Profesores_Secundaria? @relation(fields: [DNI_Profesor_Secundaria], references: [DNI_Profesor_Secundaria])
   estudiantes             T_Estudiantes[]
-  cursos_horario          T_Cursos_Horario[] // Nueva línea: Relación inversa con cursos horario
+  cursos_horario          T_Cursos_Horario[]
 
   @@map("T_Aulas")
 }
@@ -130,9 +135,9 @@ model T_Cursos_Horario {
   Indice_Hora_Academica_Inicio Int                     @db.Integer
   Cant_Hora_Academicas         Int                     @db.Integer
   DNI_Profesor_Secundaria      String                  @db.VarChar(8)
-  Id_Aula_Secundaria           Int // Nueva línea: Clave foránea para la relación con Aula
+  Id_Aula_Secundaria           Int
   profesor_secundaria          T_Profesores_Secundaria @relation(fields: [DNI_Profesor_Secundaria], references: [DNI_Profesor_Secundaria])
-  aula                         T_Aulas                 @relation(fields: [Id_Aula_Secundaria], references: [Id_Aula]) // Nueva línea: Relación con Aula
+  aula                         T_Aulas                 @relation(fields: [Id_Aula_Secundaria], references: [Id_Aula])
 
   @@map("T_Cursos_Horario")
 }
@@ -215,24 +220,39 @@ model T_Control_Salida_Mensual_Auxiliar {
   @@map("T_Control_Salida_Mensual_Auxiliar")
 }
 
+// TABLA MODIFICADA: Se removieron Horario_Laboral_Entrada y Horario_Laboral_Salida
 model T_Personal_Administrativo {
-  DNI_Personal_Administrativo String   @id @db.VarChar(8)
-  Nombres                     String   @db.VarChar(60)
-  Apellidos                   String   @db.VarChar(60)
-  Genero                      String   @db.VarChar(1) // Reemplazado ENUM por VARCHAR(1)
-  Nombre_Usuario              String   @unique @db.VarChar(40)
+  DNI_Personal_Administrativo String  @id @db.VarChar(8)
+  Nombres                     String  @db.VarChar(60)
+  Apellidos                   String  @db.VarChar(60)
+  Genero                      String  @db.VarChar(1) // Reemplazado ENUM por VARCHAR(1)
+  Nombre_Usuario              String  @unique @db.VarChar(40)
   Estado                      Boolean
-  Celular                     String   @db.VarChar(9)
-  Contraseña                 String   @db.Text
-  Google_Drive_Foto_ID        String?  @db.Text
-  Horario_Laboral_Entrada     DateTime @db.Time
-  Horario_Laboral_Salida      DateTime @db.Time
-  Cargo                       String   @db.VarChar(75)
+  Celular                     String  @db.VarChar(9)
+  Contraseña                 String  @db.Text
+  Google_Drive_Foto_ID        String? @db.Text
+  Cargo                       String  @db.VarChar(75)
 
+  // Relaciones existentes
   registros_entrada T_Control_Entrada_Mensual_Personal_Administrativo[]
   registros_salida  T_Control_Salida_Mensual_Personal_Administrativo[]
 
+  // Nueva relación con horarios por días
+  horarios_por_dias T_Horarios_Por_Dias_Personal_Administrativo[]
+
   @@map("T_Personal_Administrativo")
+}
+
+// NUEVA TABLA: Horarios por días para Personal Administrativo
+model T_Horarios_Por_Dias_Personal_Administrativo {
+  Id_Horario_Por_Dia_P_Administrativo Int                       @id @default(autoincrement())
+  Dia                                 Int                       @db.SmallInt // 1-5 (Lunes a Viernes)
+  Hora_Inicio                         DateTime                  @db.Time
+  Hora_Fin                            DateTime                  @db.Time
+  DNI_Personal_Administrativo         String                    @db.VarChar(8)
+  personal_administrativo             T_Personal_Administrativo @relation(fields: [DNI_Personal_Administrativo], references: [DNI_Personal_Administrativo])
+
+  @@map("T_Horarios_Por_Dias_Personal_Administrativo")
 }
 
 model T_Control_Entrada_Mensual_Personal_Administrativo {
@@ -253,6 +273,40 @@ model T_Control_Salida_Mensual_Personal_Administrativo {
   personal_administrativo     T_Personal_Administrativo @relation(fields: [DNI_Personal_Administrativo], references: [DNI_Personal_Administrativo])
 
   @@map("T_Control_Salida_Mensual_Personal_Administrativo")
+}
+
+// NUEVA TABLA: Horarios por días para Directivos
+model T_Horarios_Por_Dias_Directivos {
+  Id_Horario_Por_Dia_Directivo Int          @id @default(autoincrement())
+  Dia                          Int          @db.SmallInt // 1-5 (Lunes a Viernes)
+  Hora_Inicio                  DateTime     @db.Time
+  Hora_Fin                     DateTime     @db.Time
+  Id_Directivo                 Int
+  directivo                    T_Directivos @relation(fields: [Id_Directivo], references: [Id_Directivo])
+
+  @@map("T_Horarios_Por_Dias_Directivos")
+}
+
+// NUEVA TABLA: Control de entrada mensual para Directivos
+model T_Control_Entrada_Mensual_Directivos {
+  Id_C_E_M_P_Directivo Int          @id @default(autoincrement())
+  Mes                  Int          @db.SmallInt
+  Entradas             Json
+  Id_Directivo         Int
+  directivo            T_Directivos @relation(fields: [Id_Directivo], references: [Id_Directivo])
+
+  @@map("T_Control_Entrada_Mensual_Directivos")
+}
+
+// NUEVA TABLA: Control de salida mensual para Directivos
+model T_Control_Salida_Mensual_Directivos {
+  Id_C_S_M_P_Directivo Int          @id @default(autoincrement())
+  Mes                  Int          @db.SmallInt
+  Salidas              Json
+  Id_Directivo         Int
+  directivo            T_Directivos @relation(fields: [Id_Directivo], references: [Id_Directivo])
+
+  @@map("T_Control_Salida_Mensual_Directivos")
 }
 
 model T_Bloqueo_Roles {
@@ -488,9 +542,9 @@ model T_Archivos_Respaldo_Google_Drive {
 }
 
 model T_Vacaciones_Interescolares {
-  Id_Vacacion_Interescolar  Int      @id @default(autoincrement())
-  Fecha_Inicio              DateTime @db.Date
-  Fecha_Conclusion          DateTime @db.Date
+  Id_Vacacion_Interescolar Int      @id @default(autoincrement())
+  Fecha_Inicio             DateTime @db.Date
+  Fecha_Conclusion         DateTime @db.Date
 
   @@map("T_Vacaciones_Interescolares")
 }

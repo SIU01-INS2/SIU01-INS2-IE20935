@@ -12,7 +12,7 @@ import {
 import {
   ValidationErrorTypes,
   RequestErrorTypes,
-} from "@/interfaces/shared/apis/errors";
+} from "@/interfaces/shared/errors";
 import ErrorMessage from "../shared/errors/ErrorMessage";
 import { RolesSistema } from "@/interfaces/shared/RolesSistema";
 import PasswordInput from "../inputs/PasswordInput";

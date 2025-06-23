@@ -21,6 +21,9 @@ import {
   modoRegistroTextos,
 } from "@/interfaces/shared/ModoRegistroPersonal";
 import { RolesSistema } from "@/interfaces/shared/RolesSistema";
+import DirectivoIcon from "../icons/DirectivoIcon";
+import { AsistenciaHoy } from "@/lib/utils/local/db/models/AsistenciasTomadasHoy/AsistenciasTomadasHoyIDB";
+import IndexedDBConnection from "@/lib/utils/local/db/IndexedDBConnection";
 
 const FullScreenModalAsistenciaPersonal = ({
   closeFullScreenModal,
@@ -106,6 +109,48 @@ const FullScreenModalAsistenciaPersonal = ({
     }
   };
 
+  const getDiagnostic = async () => {
+    try {
+      await IndexedDBConnection.init();
+      const store = await IndexedDBConnection.getStore(
+        "asistencias_tomadas_hoy",
+        "readonly"
+      );
+
+      return new Promise<void>((resolve) => {
+        const request = store.openCursor();
+
+        request.onsuccess = (event) => {
+          const cursor = (event.target as IDBRequest)
+            .result as IDBCursorWithValue;
+
+          if (cursor) {
+            const asistencia = cursor.value as AsistenciaHoy;
+            console.log(`🔍 REGISTRO EN CACHE:`);
+            console.log(`  - Clave: ${asistencia.clave}`);
+            console.log(
+              `  - DNI: ${asistencia.dni} (tipo: ${typeof asistencia.dni})`
+            );
+            console.log(`  - Actor: ${asistencia.actor}`);
+            console.log(`  - Modo: ${asistencia.modoRegistro}`);
+            console.log(`  - Fecha: ${asistencia.fecha}`);
+            console.log(`---`);
+
+            cursor.continue();
+          } else {
+            resolve();
+          }
+        };
+      });
+    } catch (error) {
+      console.error("Error en diagnóstico:", error);
+    }
+  };
+
+  useEffect(() => {
+    getDiagnostic();
+  }, []);
+
   // Determinar qué contenido mostrar según el estado actual
   const renderContenido = () => {
     // Si estamos cargando, mostrar un spinner
@@ -132,46 +177,119 @@ const FullScreenModalAsistenciaPersonal = ({
               {saludo}, haz clic en tu Rol
             </h1>
 
-            {/* Tarjetas de roles en grid de 2x2 */}
-            <div className="grid grid-cols-2 gap-3 sm-only:gap-4 md-only:gap-5 lg-only:gap-5 xl-only:gap-5 w-full max-w-lg mx-auto">
-              <RolBoton
-                className="justify-self-center"
-                onClick={() =>
-                  handleRolSelection(RolesSistema.ProfesorPrimaria)
-                }
-                icon={
-                  <ProfesorPrimariaIcon className="max-lg:short-height:h-[7vh] max-sm:w-[1.5rem] sm-only:w-[2rem] md-only:w-[2rem] lg-only:w-[2.2rem] xl-only:w-[2.5rem] text-negro" />
-                }
-                label="Profesor (Primaria)"
-              />
-              <RolBoton
-                className="justify-self-center"
-                onClick={() => handleRolSelection(RolesSistema.Auxiliar)}
-                icon={
-                  <AuxiliarIcon className="max-lg:short-height:h-[7vh] max-sm:w-[1.5rem] sm-only:w-[1.7rem] md-only:w-[1.7rem] lg-only:w-[1.9rem] xl-only:w-[2.2rem] text-negro" />
-                }
-                label="Auxiliar"
-              />
-              <RolBoton
-                className="justify-self-center"
-                onClick={() =>
-                  handleRolSelection(RolesSistema.ProfesorSecundaria)
-                }
-                icon={
-                  <ProfesorOTutorIcon className="max-lg:short-height:h-[6.5vh] max-sm:w-[1.4rem] sm-only:w-[1.6rem] md-only:w-[1.8rem] lg-only:w-[1.9rem] xl-only:w-[2.3rem] text-negro" />
-                }
-                label="Profesor/Tutor (Secundaria)"
-              />
-              <RolBoton
-                className="justify-self-center"
-                onClick={() =>
-                  handleRolSelection(RolesSistema.PersonalAdministrativo)
-                }
-                icon={
-                  <PersonasGenericasIcon className="max-lg:short-height:h-[7vh] max-sm:w-[1.5rem] sm-only:w-[1.8rem] md-only:w-[1.9rem] lg-only:w-[2.2rem] xl-only:w-[2.5rem] text-negro" />
-                }
-                label="Otro"
-              />
+            {/* Tarjetas de roles - Responsive: 2x2+1 en móvil, 3+2 en desktop */}
+            <div className="w-full max-w-lg mx-auto px-3">
+              {/* Layout para móviles - 2 por fila + 1 centrado */}
+              <div className="sxs-only:block xs-only:block sm-only:block md-only:hidden lg-only:hidden xl-only:hidden">
+                <div className="flex flex-col items-center gap-3 xs-only:gap-4 sm-only:gap-4">
+                  {/* Primera fila móvil - 2 botones */}
+                  <div className="flex items-center justify-center gap-3 xs-only:gap-4 sm-only:gap-5">
+                    <RolBoton
+                      onClick={() =>
+                        handleRolSelection(RolesSistema.ProfesorPrimaria)
+                      }
+                      icon={
+                        <ProfesorPrimariaIcon className="max-lg:short-height:h-[7vh] sxs-only:w-[1.3rem] xs-only:w-[1.4rem] sm-only:w-[1.6rem] text-negro" />
+                      }
+                      label="Profesor (Primaria)"
+                    />
+                    <RolBoton
+                      onClick={() => handleRolSelection(RolesSistema.Auxiliar)}
+                      icon={
+                        <AuxiliarIcon className="max-lg:short-height:h-[7vh] sxs-only:w-[1.3rem] xs-only:w-[1.4rem] sm-only:w-[1.5rem] text-negro" />
+                      }
+                      label="Auxiliar"
+                    />
+                  </div>
+
+                  {/* Segunda fila móvil - 2 botones */}
+                  <div className="flex items-center justify-center gap-3 xs-only:gap-4 sm-only:gap-5">
+                    <RolBoton
+                      onClick={() =>
+                        handleRolSelection(RolesSistema.ProfesorSecundaria)
+                      }
+                      icon={
+                        <ProfesorOTutorIcon className="max-lg:short-height:h-[6.5vh] sxs-only:w-[1.2rem] xs-only:w-[1.3rem] sm-only:w-[1.4rem] text-negro" />
+                      }
+                      label="Profesor/Tutor (Secundaria)"
+                    />
+                    <RolBoton
+                      onClick={() =>
+                        handleRolSelection(RolesSistema.PersonalAdministrativo)
+                      }
+                      icon={
+                        <PersonasGenericasIcon className="max-lg:short-height:h-[7vh] sxs-only:w-[1.3rem] xs-only:w-[1.4rem] sm-only:w-[1.6rem] text-negro" />
+                      }
+                      label="Otro"
+                    />
+                  </div>
+
+                  {/* Tercera fila móvil - 1 botón centrado */}
+                  <div className="flex items-center justify-center">
+                    <RolBoton
+                      onClick={() => handleRolSelection(RolesSistema.Directivo)}
+                      icon={
+                        <DirectivoIcon className="max-lg:short-height:h-[7vh] sxs-only:w-[1.3rem] xs-only:w-[1.4rem] sm-only:w-[1.6rem] text-negro" />
+                      }
+                      label="Directivo"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              {/* Layout para tablet/desktop - 3+2 */}
+              <div className="sxs-only:hidden xs-only:hidden sm-only:hidden md-only:block lg-only:block xl-only:block">
+                <div className="flex flex-col items-center justify-center">
+                  {/* Primera fila desktop - 3 botones */}
+                  <div className="flex items-center justify-center gap-5 md-only:gap-6 lg-only:gap-7 xl-only:gap-8 mb-5 md-only:mb-6 lg-only:mb-7 xl-only:mb-8">
+                    <RolBoton
+                      onClick={() =>
+                        handleRolSelection(RolesSistema.ProfesorPrimaria)
+                      }
+                      icon={
+                        <ProfesorPrimariaIcon className="md-only:w-[2rem] lg-only:w-[2.3rem] xl-only:w-[2.6rem] text-negro" />
+                      }
+                      label="Profesor (Primaria)"
+                    />
+                    <RolBoton
+                      onClick={() => handleRolSelection(RolesSistema.Auxiliar)}
+                      icon={
+                        <AuxiliarIcon className="md-only:w-[1.8rem] lg-only:w-[2.1rem] xl-only:w-[2.4rem] text-negro" />
+                      }
+                      label="Auxiliar"
+                    />
+                    <RolBoton
+                      onClick={() =>
+                        handleRolSelection(RolesSistema.ProfesorSecundaria)
+                      }
+                      icon={
+                        <ProfesorOTutorIcon className="md-only:w-[1.9rem] lg-only:w-[2.2rem] xl-only:w-[2.5rem] text-negro" />
+                      }
+                      label="Profesor/Tutor (Secundaria)"
+                    />
+                  </div>
+
+                  {/* Segunda fila desktop - 2 botones centrados */}
+                  <div className="flex items-center justify-center gap-5 md-only:gap-6 lg-only:gap-7 xl-only:gap-8">
+                    <RolBoton
+                      onClick={() =>
+                        handleRolSelection(RolesSistema.PersonalAdministrativo)
+                      }
+                      icon={
+                        <PersonasGenericasIcon className="md-only:w-[2rem] lg-only:w-[2.3rem] xl-only:w-[2.6rem] text-negro" />
+                      }
+                      label="Otro"
+                    />
+                    <RolBoton
+                      onClick={() => handleRolSelection(RolesSistema.Directivo)}
+                      icon={
+                        <DirectivoIcon className="md-only:w-[2rem] lg-only:w-[2.3rem] xl-only:w-[2.6rem] text-negro" />
+                      }
+                      label="Directivo"
+                    />
+                  </div>
+                </div>
+              </div>
             </div>
           </div>
         </div>
