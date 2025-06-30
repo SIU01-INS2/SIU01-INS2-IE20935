@@ -216,6 +216,7 @@ function filtrarDatosSegunRol(
           datos.HorariosLaboraresGenerales.TomaAsistenciaProfesorPrimaria,
         HorarioEscolarPrimaria:
           datos.HorariosEscolares[NivelEducativo.PRIMARIA],
+        Mi_DNI: idUsuario,
       } as ProfesorPrimariaAsistenciaResponse;
 
     case RolesSistema.Auxiliar:
@@ -226,6 +227,7 @@ function filtrarDatosSegunRol(
           datos.HorariosLaboraresGenerales.TomaAsistenciaAuxiliares,
         HorarioEscolarSecundaria:
           datos.HorariosEscolares[NivelEducativo.SECUNDARIA],
+        Mi_DNI: idUsuario,
       } as AuxiliarAsistenciaResponse;
 
     case RolesSistema.ProfesorSecundaria:
@@ -245,6 +247,7 @@ function filtrarDatosSegunRol(
           : false,
         HorarioEscolarSecundaria:
           datos.HorariosEscolares[NivelEducativo.SECUNDARIA],
+        Mi_DNI: idUsuario,
       } as ProfesorTutorSecundariaAsistenciaResponse;
 
     case RolesSistema.Responsable:
@@ -267,6 +270,7 @@ function filtrarDatosSegunRol(
               Horario_Laboral_Salida: personalInfo.Hora_Salida_Dia_Actual,
             }
           : false,
+        Mi_DNI: idUsuario,
       } as PersonalAdministrativoAsistenciaResponse;
 
     default:

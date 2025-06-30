@@ -12,6 +12,10 @@ export class HandlerProfesorTutorSecundariaAsistenciaResponse extends HandlerAsi
     this.profesorSecundariaData = asistenciaData;
   }
 
+  public getMiDNI(): string {
+    return this.profesorSecundariaData.Mi_DNI;
+  }
+
   public getMiHorarioTomaAsistencia():
     | { Hora_Entrada_Dia_Actual: Date; Hora_Salida_Dia_Actual: Date }
     | false

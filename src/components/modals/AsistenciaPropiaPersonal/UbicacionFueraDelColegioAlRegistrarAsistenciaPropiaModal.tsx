@@ -1,6 +1,6 @@
 import ModalContainer from "../ModalContainer";
 
-const FalloConexionAInternetAlMarcarAsistenciaPropiaModal = ({
+const UbicacionFueraDelColegioAlRegistrarAsistenciaPropiaModal = ({
   eliminateModal,
 }: {
   eliminateModal: () => void;
@@ -10,15 +10,15 @@ const FalloConexionAInternetAlMarcarAsistenciaPropiaModal = ({
       <div className="w-full overflow-x-hidden">
         <div className="w-full max-w-md px-4 py-6 sm:px-6 sm:py-8 mx-auto flex flex-col items-center justify-center gap-5">
           <img
-            src="\images\svg\Asistencia\ConexionInternetAsistenciaPropia.svg"
-            alt="Conexion a Internet"
+            src="\images\svg\Asistencia\UbicacionColegioAsistencia.svg"
+            alt="Ubicacion Colegio"
             className="w-[70px] xs:w-[85px] sm:w-[95px] h-auto object-contain"
           />
 
           <p className="text-center text-sm xs:text-base sm:text-lg leading-relaxed">
-            No hay conexión a <br />
-            Internet. Conéctate a <br />
-            una red para registrar <br /> tu asistencia.
+            Parece que no estás <br />
+            dentro del colegio. <br /> Solo puedes registrar <br />
+            tu asistencia cuando <br /> estés en el colegio.
           </p>
         </div>
       </div>
@@ -26,4 +26,4 @@ const FalloConexionAInternetAlMarcarAsistenciaPropiaModal = ({
   );
 };
 
-export default FalloConexionAInternetAlMarcarAsistenciaPropiaModal;
+export default UbicacionFueraDelColegioAlRegistrarAsistenciaPropiaModal;

@@ -137,6 +137,111 @@ export class AsistenciaDePersonalRepository {
   }
 
   /**
+   * ✅ CORREGIDO: Verificación menos restrictiva - AL MENOS 1 día con datos es suficiente
+   */
+  public async verificarDatosEnUltimosDiasEscolares(
+    tipoPersonal: TipoPersonal,
+    modoRegistro: ModoRegistro,
+    id_o_dni: string | number,
+    mes: number,
+    ultimosDiasEscolares: number[]
+  ): Promise<{
+    tieneDatosSuficientes: boolean;
+    diasConDatos: number[];
+    diasSinDatos: number[];
+    porcentajeCobertura: number;
+  }> {
+    try {
+      const registro = await this.obtenerRegistroMensual(
+        tipoPersonal,
+        modoRegistro,
+        id_o_dni,
+        mes
+      );
+
+      if (!registro) {
+        return {
+          tieneDatosSuficientes: false,
+          diasConDatos: [],
+          diasSinDatos: ultimosDiasEscolares,
+          porcentajeCobertura: 0,
+        };
+      }
+
+      const diasConDatos: number[] = [];
+      const diasSinDatos: number[] = [];
+
+      ultimosDiasEscolares.forEach((dia) => {
+        const claveDay = dia.toString();
+        if (registro.registros[claveDay]) {
+          diasConDatos.push(dia);
+        } else {
+          diasSinDatos.push(dia);
+        }
+      });
+
+      const porcentajeCobertura =
+        ultimosDiasEscolares.length > 0
+          ? (diasConDatos.length / ultimosDiasEscolares.length) * 100
+          : 0;
+
+      // ✅ CORREGIDO: Criterio menos restrictivo
+      // Si hay al menos 40% de cobertura O al menos 2 días con datos, es suficiente
+      let tieneDatosSuficientes =
+        porcentajeCobertura >= 40 || diasConDatos.length >= 2;
+
+      // ✅ NUEVA VALIDACIÓN: Verificar que los días sin datos NO sean los últimos seguidos
+      if (
+        diasSinDatos.length > 0 &&
+        ultimosDiasEscolares.length >= diasSinDatos.length
+      ) {
+        const ultimosNDias = ultimosDiasEscolares.slice(-diasSinDatos.length);
+        const sonLosUltimosConsecutivos =
+          ultimosNDias.every((dia) => diasSinDatos.includes(dia)) &&
+          diasSinDatos.every((dia) => ultimosNDias.includes(dia));
+
+        if (sonLosUltimosConsecutivos) {
+          tieneDatosSuficientes = false;
+          console.log(
+            `⚠️ Los días sin datos son los últimos ${
+              diasSinDatos.length
+            } días seguidos: ${diasSinDatos.join(
+              ", "
+            )} - indica falta de actualización`
+          );
+        }
+      }
+
+      console.log(`📊 Verificación días escolares - ${id_o_dni}:`, {
+        ultimosDiasEscolares,
+        diasConDatos,
+        diasSinDatos,
+        porcentajeCobertura: `${porcentajeCobertura.toFixed(1)}%`,
+        tieneDatosSuficientes,
+        criterio: `≥40% cobertura O ≥2 días con datos`,
+      });
+
+      return {
+        tieneDatosSuficientes,
+        diasConDatos,
+        diasSinDatos,
+        porcentajeCobertura,
+      };
+    } catch (error) {
+      console.error(
+        "Error al verificar datos en últimos días escolares:",
+        error
+      );
+      return {
+        tieneDatosSuficientes: false,
+        diasConDatos: [],
+        diasSinDatos: ultimosDiasEscolares,
+        porcentajeCobertura: 0,
+      };
+    }
+  }
+
+  /**
    * Obtiene el registro mensual de asistencia para un personal específico
    * ✅ ACTUALIZADO: Usa ID_o_DNI_Personal
    * ✅ MEJORADO: Mejor logging para debugging

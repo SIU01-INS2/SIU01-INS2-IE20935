@@ -34,6 +34,10 @@ import { DatosAsistenciaHoyIDB } from "@/lib/utils/local/db/models/DatosAsistenc
 import { Entorno } from "@/interfaces/shared/Entornos";
 import { ENTORNO } from "../../../constants/ENTORNO";
 import ComunicadosDeHoy from "@/components/modals/Comunicados/ComunicadosDeHoy";
+import {
+  NOMBRE_TIMESTAMP_ULTIMA_CONSULTA_LOCAL_STORAGE,
+  TIEMPO_PARA_ACTUALIZAR_MINIMO_HORA_AL_VOLVER_A_VER_PAGINA_MS,
+} from "@/constants/INTERVALO_MINUTOS_SINCRONIZACION_HORA_REAL";
 
 /**
  * Componente Header - Barra superior con información del usuario y controles del sidebar
@@ -86,7 +90,25 @@ const Header = ({
     sincronizarConServidor();
     document.addEventListener("visibilitychange", () => {
       if (document.visibilityState === "visible") {
-        sincronizarConServidor();
+        // Comprobar si ha pasado el tiempo mínimo antes de sincronizar
+        const ultimaConsulta = localStorage.getItem(
+          NOMBRE_TIMESTAMP_ULTIMA_CONSULTA_LOCAL_STORAGE
+        );
+        const ahora = Date.now();
+
+        if (
+          !ultimaConsulta ||
+          Math.abs(ahora - parseInt(ultimaConsulta)) >=
+            TIEMPO_PARA_ACTUALIZAR_MINIMO_HORA_AL_VOLVER_A_VER_PAGINA_MS
+        ) {
+          sincronizarConServidor();
+        }
+      } else {
+        // Cuando la página deja de ser visible, guardar el timestamp
+        localStorage.setItem(
+          NOMBRE_TIMESTAMP_ULTIMA_CONSULTA_LOCAL_STORAGE,
+          Date.now().toString()
+        );
       }
     });
   }, []);

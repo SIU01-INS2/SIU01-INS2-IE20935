@@ -60,6 +60,15 @@ select::-webkit-listbox {
 
 /* CLASES UTILES 🔁 ==============================================================================*/
 
+.siasis-shadow-card {
+  @apply shadow-[0_0_8px_5px_rgba(0,0,0,0.2)] 
+         hover:shadow-[0_0_12px_8px_rgba(0,0,0,0.25)] 
+         transition-all 
+         duration-300 
+         hover:bg-gray-50 
+         cursor-pointer;
+}
+
 /* LOADER */
 .loader {
   aspect-ratio: 1;
@@ -158,4 +167,3 @@ select::-webkit-listbox {
     @apply bg-background text-foreground;
   }
 }
-

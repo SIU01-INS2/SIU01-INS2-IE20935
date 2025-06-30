@@ -1,6 +1,6 @@
 import ModalContainer from "../ModalContainer";
 
-const ActivarGPSAsistenciaPropia = ({
+const ActivarGPSoBrindarPermisosGPSModal = ({
   eliminateModal,
 }: {
   eliminateModal: () => void;
@@ -38,4 +38,4 @@ const ActivarGPSAsistenciaPropia = ({
   );
 };
 
-export default ActivarGPSAsistenciaPropia;
+export default ActivarGPSoBrindarPermisosGPSModal;

@@ -12,6 +12,10 @@ export class HandlerAuxiliarAsistenciaResponse extends HandlerAsistenciaBase {
     this.auxiliarData = asistenciaData;
   }
 
+  public getMiDNI(): string {
+    return this.auxiliarData.Mi_DNI;
+  }
+
   public getMiHorarioTomaAsistencia(): HorarioTomaAsistencia {
     return this.auxiliarData.HorarioTomaAsistenciaAuxiliares;
   }

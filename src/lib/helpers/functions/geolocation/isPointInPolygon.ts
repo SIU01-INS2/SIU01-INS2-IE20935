@@ -9,7 +9,7 @@ export function isPointInPolygon(
   polygon: PuntoGeografico[]
 ): boolean {
   const x = point.longitud; // Longitud como x
-  const y = point.latitud; // latitud como y
+  const y = point.latitud;  // latitud como y
   const n = polygon.length;
   let inside = false;
 

@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import { Meses } from "@/interfaces/shared/Meses";
 import {
   OperationResult,
@@ -17,6 +18,8 @@ import {
 import { AsistenciaDePersonalDateHelper } from "./AsistenciaDePersonalDateHelper";
 import { AsistenciaDePersonalMapper } from "./AsistenciaDePersonalMapper";
 import IndexedDBConnection from "../../../IndexedDBConnection";
+import { AsistenciaDePersonalAPIClient } from "./AsistenciaDePersonalAPIClient";
+import { AsistenciaDePersonalValidator } from "./AsistenciaDePersonalValidator";
 
 /**
  * 🎯 RESPONSABILIDAD: Manejo del cache de asistencias
@@ -31,15 +34,21 @@ export class AsistenciaDePersonalCacheManager {
   private mapper: AsistenciaDePersonalMapper;
   private dateHelper: AsistenciaDePersonalDateHelper;
   private ultimaLimpiezaDiaAnterior: string | null = null; // 🆕 Evita limpiezas duplicadas
+  private apiClient: AsistenciaDePersonalAPIClient;
+  private validator: AsistenciaDePersonalValidator;
 
   constructor(
     mapper: AsistenciaDePersonalMapper,
-    dateHelper: AsistenciaDePersonalDateHelper
+    dateHelper: AsistenciaDePersonalDateHelper,
+    apiClient: AsistenciaDePersonalAPIClient,
+    validator: AsistenciaDePersonalValidator
   ) {
     this.mapper = mapper;
     this.dateHelper = dateHelper;
+    this.apiClient = apiClient;
     this.cacheAsistenciasHoy = new AsistenciasTomadasHoyIDB(this.dateHelper);
-
+    this.validator = validator;
+    this.limpiarControlesRedisAntiguos();
     // Inicializar rutinas de mantenimiento del cache
     // this.cacheAsistenciasHoy.inicializarMantenimiento();
   }
@@ -86,8 +95,7 @@ export class AsistenciaDePersonalCacheManager {
   }
 
   /**
-   * Consulta cache de asistencias para el día actual
-   * 🆕 INCLUYE limpieza automática del día anterior
+   * ✅ CORREGIDO: Consulta cache con fecha correcta
    */
   public async consultarCacheAsistenciaHoy(
     actor: ActoresSistema,
@@ -108,7 +116,7 @@ export class AsistenciaDePersonalCacheManager {
       };
 
       console.log(
-        `🔍 Consultando cache: ${actor} - ${modoRegistro} - ${id_o_dni} - ${fecha}`
+        `🔍 Consultando cache con fecha VERIFICADA: ${fecha} - ${actor} - ${modoRegistro} - ${id_o_dni}`
       );
 
       const resultado = await this.cacheAsistenciasHoy.consultarAsistencia(
@@ -117,12 +125,14 @@ export class AsistenciaDePersonalCacheManager {
 
       if (resultado) {
         console.log(
-          `✅ Encontrado en cache: ${id_o_dni} - ${modoRegistro} - ${
+          `✅ Encontrado en cache: ${id_o_dni} - ${modoRegistro} - ${fecha} - ${
             (resultado as AsistenciaPersonalHoy).estado
           }`
         );
       } else {
-        console.log(`❌ No encontrado en cache: ${id_o_dni} - ${modoRegistro}`);
+        console.log(
+          `❌ No encontrado en cache: ${id_o_dni} - ${modoRegistro} - ${fecha}`
+        );
       }
 
       return resultado as AsistenciaPersonalHoy | null;
@@ -155,6 +165,161 @@ export class AsistenciaDePersonalCacheManager {
       return {
         exitoso: false,
         mensaje: `Error al guardar en cache: ${
+          error instanceof Error ? error.message : "Error desconocido"
+        }`,
+      };
+    }
+  }
+
+  /**
+   * ✅ NUEVO: Integra datos directos de Redis con registros históricos
+   */
+  public async integrarDatosDirectosDeRedis(
+    registroEntrada: AsistenciaMensualPersonalLocal | null,
+    registroSalida: AsistenciaMensualPersonalLocal | null,
+    datosRedis: {
+      entrada?: any;
+      salida?: any;
+      encontradoEntrada: boolean;
+      encontradoSalida: boolean;
+    },
+    rol: RolesSistema,
+    id_o_dni: string | number,
+    diaActual: number
+  ): Promise<{
+    entrada?: AsistenciaMensualPersonalLocal;
+    salida?: AsistenciaMensualPersonalLocal;
+    integrado: boolean;
+    mensaje: string;
+  }> {
+    try {
+      await this.limpiarDiasAnterioresAutomaticamente();
+
+      let entradaFinal = registroEntrada;
+      let salidaFinal = registroSalida;
+      let integrado = false;
+
+      const fechaHoy = this.dateHelper.obtenerFechaStringActual();
+      if (!fechaHoy) {
+        return {
+          entrada: entradaFinal || undefined,
+          salida: salidaFinal || undefined,
+          integrado: false,
+          mensaje: "No se pudo obtener fecha actual",
+        };
+      }
+
+      const actor = this.mapper.obtenerActorDesdeRol(rol);
+
+      // Integrar entrada desde Redis
+      if (datosRedis.encontradoEntrada && datosRedis.entrada?.Resultados) {
+        const resultado = Array.isArray(datosRedis.entrada.Resultados)
+          ? datosRedis.entrada.Resultados[0]
+          : datosRedis.entrada.Resultados;
+
+        if (resultado?.AsistenciaMarcada && resultado.Detalles) {
+          const timestamp =
+            resultado.Detalles.Timestamp ||
+            this.dateHelper.obtenerTimestampPeruano();
+          const desfaseSegundos = resultado.Detalles.DesfaseSegundos || 0;
+          const estado = this.mapper.determinarEstadoAsistencia(
+            desfaseSegundos,
+            ModoRegistro.Entrada
+          );
+
+          // ✅ CREAR Y GUARDAR EN CACHE LOCAL
+          const asistenciaEntrada = this.crearAsistenciaParaCache(
+            String(id_o_dni),
+            actor,
+            ModoRegistro.Entrada,
+            timestamp,
+            desfaseSegundos,
+            estado,
+            fechaHoy
+          );
+
+          await this.guardarAsistenciaEnCache(asistenciaEntrada);
+
+          // ✅ INTEGRAR EN REGISTRO MENSUAL
+          entradaFinal = this.integrarDatosDeCacheEnRegistroMensual(
+            entradaFinal,
+            asistenciaEntrada,
+            diaActual,
+            ModoRegistro.Entrada,
+            id_o_dni,
+            fechaHoy
+          );
+
+          integrado = true;
+          console.log(
+            `✅ Entrada integrada desde Redis y guardada en cache: ${estado}`
+          );
+        }
+      }
+
+      // Integrar salida desde Redis
+      if (datosRedis.encontradoSalida && datosRedis.salida?.Resultados) {
+        const resultado = Array.isArray(datosRedis.salida.Resultados)
+          ? datosRedis.salida.Resultados[0]
+          : datosRedis.salida.Resultados;
+
+        if (resultado?.AsistenciaMarcada && resultado.Detalles) {
+          const timestamp =
+            resultado.Detalles.Timestamp ||
+            this.dateHelper.obtenerTimestampPeruano();
+          const desfaseSegundos = resultado.Detalles.DesfaseSegundos || 0;
+          const estado = this.mapper.determinarEstadoAsistencia(
+            desfaseSegundos,
+            ModoRegistro.Salida
+          );
+
+          // ✅ CREAR Y GUARDAR EN CACHE LOCAL
+          const asistenciaSalida = this.crearAsistenciaParaCache(
+            String(id_o_dni),
+            actor,
+            ModoRegistro.Salida,
+            timestamp,
+            desfaseSegundos,
+            estado,
+            fechaHoy
+          );
+
+          await this.guardarAsistenciaEnCache(asistenciaSalida);
+
+          // ✅ INTEGRAR EN REGISTRO MENSUAL
+          salidaFinal = this.integrarDatosDeCacheEnRegistroMensual(
+            salidaFinal,
+            asistenciaSalida,
+            diaActual,
+            ModoRegistro.Salida,
+            id_o_dni,
+            fechaHoy
+          );
+
+          integrado = true;
+          console.log(
+            `✅ Salida integrada desde Redis y guardada en cache: ${estado}`
+          );
+        }
+      }
+
+      const mensaje = integrado
+        ? "Datos integrados desde Redis y guardados en cache local"
+        : "No se encontraron datos nuevos en Redis";
+
+      return {
+        entrada: entradaFinal || undefined,
+        salida: salidaFinal || undefined,
+        integrado,
+        mensaje,
+      };
+    } catch (error) {
+      console.error("❌ Error al integrar datos directos de Redis:", error);
+      return {
+        entrada: registroEntrada || undefined,
+        salida: registroSalida || undefined,
+        integrado: false,
+        mensaje: `Error en integración: ${
           error instanceof Error ? error.message : "Error desconocido"
         }`,
       };
@@ -303,11 +468,276 @@ export class AsistenciaDePersonalCacheManager {
     };
   }
 
+  // ✅ NUEVO: Control centralizado de consultas Redis
+  private static consultasRedisControlGlobal: Map<string, number> = new Map();
+
+  /**
+   * ✅ NUEVO: Verifica si ya se consultó Redis para esta persona/fecha/rango
+   */
+  private generarClaveControlRedis(
+    id_o_dni: string | number,
+    fecha: string,
+    rango: string
+  ): string {
+    return `redis_control:${fecha}:${rango}:${id_o_dni}`;
+  }
+
+  /**
+   * ✅ NUEVO: Verifica si ya se consultó Redis en este rango
+   */
+  public yaSeConsultoRedisEnRango(
+    id_o_dni: string | number,
+    estrategia: string
+  ): {
+    yaConsultado: boolean;
+    ultimaConsulta: number | null;
+    razon: string;
+  } {
+    const fechaHoy = this.dateHelper.obtenerFechaStringActual();
+    const rangoActual =
+      this.dateHelper.obtenerRangoHorarioActualConConstantes();
+
+    if (!fechaHoy) {
+      return {
+        yaConsultado: false,
+        ultimaConsulta: null,
+        razon: "No se pudo obtener fecha actual",
+      };
+    }
+
+    const claveControl = this.generarClaveControlRedis(
+      id_o_dni,
+      fechaHoy,
+      rangoActual.rango
+    );
+    const ultimaConsulta =
+      AsistenciaDePersonalCacheManager.consultasRedisControlGlobal.get(
+        claveControl
+      );
+
+    if (!ultimaConsulta) {
+      return {
+        yaConsultado: false,
+        ultimaConsulta: null,
+        razon: `Primera consulta Redis para ${estrategia} en rango ${rangoActual.rango}`,
+      };
+    }
+
+    const controlRango =
+      this.dateHelper.yaSeConsultoEnRangoActual(ultimaConsulta);
+
+    return {
+      yaConsultado: controlRango.yaConsultado,
+      ultimaConsulta,
+      razon: `${controlRango.razon} (control global)`,
+    };
+  }
+
+  /**
+   * ✅ NUEVO: Marca que se consultó Redis en este momento
+   */
+  public marcarConsultaRedisRealizada(id_o_dni: string | number): void {
+    const fechaHoy = this.dateHelper.obtenerFechaStringActual();
+    const rangoActual =
+      this.dateHelper.obtenerRangoHorarioActualConConstantes();
+    const timestampActual = this.dateHelper.obtenerTimestampPeruano();
+
+    if (fechaHoy) {
+      const claveControl = this.generarClaveControlRedis(
+        id_o_dni,
+        fechaHoy,
+        rangoActual.rango
+      );
+      AsistenciaDePersonalCacheManager.consultasRedisControlGlobal.set(
+        claveControl,
+        timestampActual
+      );
+
+      console.log(
+        `🔒 Consulta Redis marcada: ${claveControl} - ${this.dateHelper.formatearTimestampLegible(
+          timestampActual
+        )}`
+      );
+    }
+  }
+
+  /**
+   * ✅ NUEVO: Limpia controles de consultas de días anteriores
+   */
+  public limpiarControlesRedisAntiguos(): void {
+    const fechaHoy = this.dateHelper.obtenerFechaStringActual();
+    if (!fechaHoy) return;
+
+    const clavesAEliminar: string[] = [];
+
+    for (const [
+      clave,
+      // eslint-disable-next-line @typescript-eslint/no-unused-vars
+      timestamp,
+    ] of AsistenciaDePersonalCacheManager.consultasRedisControlGlobal.entries()) {
+      if (clave.includes("redis_control:") && !clave.includes(fechaHoy)) {
+        clavesAEliminar.push(clave);
+      }
+    }
+
+    clavesAEliminar.forEach((clave) => {
+      AsistenciaDePersonalCacheManager.consultasRedisControlGlobal.delete(
+        clave
+      );
+    });
+
+    if (clavesAEliminar.length > 0) {
+      console.log(
+        `🧹 Limpieza controles Redis antiguos: ${clavesAEliminar.length} eliminados`
+      );
+    }
+  }
+
+  /**
+   * 🎯 CONSULTA INTELIGENTE: Verifica cache local primero, luego Redis si es necesario
+   * ✅ INTEGRACIÓN COMPLETA con AsistenciasTomadasHoyIDB según flowchart
+   */
+  public async consultarAsistenciaConFallbackRedis(
+    rol: RolesSistema,
+    id_o_dni: string | number,
+    modoRegistro: ModoRegistro,
+    estrategia: "REDIS_ENTRADAS" | "REDIS_COMPLETO"
+  ): Promise<{
+    encontrado: boolean;
+    datos?: AsistenciaPersonalHoy;
+    fuente: "CACHE_LOCAL" | "REDIS" | "NO_ENCONTRADO";
+    mensaje: string;
+  }> {
+    try {
+      // 🆕 LIMPIAR día anterior automáticamente
+      await this.limpiarDiasAnterioresAutomaticamente();
+
+      const actor = this.mapper.obtenerActorDesdeRol(rol);
+      const fechaHoy = this.dateHelper.obtenerFechaStringActual();
+
+      if (!fechaHoy) {
+        return {
+          encontrado: false,
+          fuente: "NO_ENCONTRADO",
+          mensaje: "No se pudo obtener fecha actual",
+        };
+      }
+
+      console.log(
+        `🔍 Consulta inteligente: ${id_o_dni} - ${modoRegistro} - estrategia: ${estrategia}`
+      );
+
+      // PASO 1: Consultar cache local (AsistenciasTomadasHoy)
+      const datosCache = await this.consultarCacheAsistenciaHoyDirecto(
+        actor,
+        modoRegistro,
+        id_o_dni,
+        fechaHoy
+      );
+
+      if (datosCache) {
+        console.log(
+          `✅ Encontrado en cache local: ${datosCache.estado} (${datosCache.dni})`
+        );
+        return {
+          encontrado: true,
+          datos: datosCache,
+          fuente: "CACHE_LOCAL",
+          mensaje: "Datos obtenidos de cache local",
+        };
+      }
+
+      // PASO 2: Validar si debe consultar Redis según estrategia
+      const debeConsultarTipoRegistro =
+        estrategia === "REDIS_COMPLETO" ||
+        (estrategia === "REDIS_ENTRADAS" &&
+          modoRegistro === ModoRegistro.Entrada);
+
+      if (!debeConsultarTipoRegistro) {
+        console.log(
+          `⏭️ No corresponde consultar ${modoRegistro} con estrategia ${estrategia}`
+        );
+        return {
+          encontrado: false,
+          fuente: "NO_ENCONTRADO",
+          mensaje: `${modoRegistro} no incluido en estrategia ${estrategia}`,
+        };
+      }
+
+      // PASO 3: Consultar Redis como fallback
+      console.log(`☁️ Consultando Redis como fallback para ${modoRegistro}...`);
+
+      const resultadoRedis = await this.apiClient.consultarRedisEspecifico(
+        rol,
+        id_o_dni,
+        modoRegistro
+      );
+
+      if (resultadoRedis.encontrado && resultadoRedis.datos?.Resultados) {
+        const resultado = Array.isArray(resultadoRedis.datos.Resultados)
+          ? resultadoRedis.datos.Resultados[0]
+          : resultadoRedis.datos.Resultados;
+
+        if (resultado?.AsistenciaMarcada && resultado.Detalles) {
+          // Crear asistencia desde datos de Redis
+          const timestamp =
+            resultado.Detalles.Timestamp ||
+            this.dateHelper.obtenerTimestampPeruano();
+          const desfaseSegundos = resultado.Detalles.DesfaseSegundos || 0;
+          const estado = this.mapper.determinarEstadoAsistencia(
+            desfaseSegundos,
+            modoRegistro
+          );
+
+          const asistenciaDesdeRedis = this.crearAsistenciaParaCache(
+            String(id_o_dni),
+            actor,
+            modoRegistro,
+            timestamp,
+            desfaseSegundos,
+            estado,
+            fechaHoy
+          );
+
+          // Guardar en cache local para próximas consultas
+          await this.guardarAsistenciaEnCache(asistenciaDesdeRedis);
+
+          console.log(
+            `✅ Encontrado en Redis y guardado en cache: ${estado} (${id_o_dni})`
+          );
+
+          return {
+            encontrado: true,
+            datos: asistenciaDesdeRedis,
+            fuente: "REDIS",
+            mensaje: "Datos obtenidos de Redis y guardados en cache local",
+          };
+        }
+      }
+
+      console.log(`📭 No encontrado ni en cache local ni en Redis`);
+      return {
+        encontrado: false,
+        fuente: "NO_ENCONTRADO",
+        mensaje: "No se encontró asistencia ni en cache local ni en Redis",
+      };
+    } catch (error) {
+      console.error("❌ Error en consulta inteligente:", error);
+      return {
+        encontrado: false,
+        fuente: "NO_ENCONTRADO",
+        mensaje: `Error en consulta: ${
+          error instanceof Error ? error.message : "Error desconocido"
+        }`,
+      };
+    }
+  }
+
   /**
    * 🆕 MÉTODO DIRECTO de consulta al cache sin limpieza automática
    * 🎯 PROPÓSITO: Evitar llamadas recursivas de limpieza
    */
-  private async consultarCacheAsistenciaHoyDirecto(
+  public async consultarCacheAsistenciaHoyDirecto(
     actor: ActoresSistema,
     modoRegistro: ModoRegistro,
     id_o_dni: string | number,

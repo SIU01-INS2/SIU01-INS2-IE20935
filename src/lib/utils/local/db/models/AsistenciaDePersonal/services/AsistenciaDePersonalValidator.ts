@@ -33,7 +33,7 @@ export class AsistenciaDePersonalValidator {
     diasEscolaresSalida: number;
   } {
     // Obtener día actual desde Redux
-    const fechaActualRedux = this.dateHelper.obtenerFechaActualDesdeRedux();
+    const fechaActualRedux = this.dateHelper.obtenerFechaHoraActualDesdeRedux();
     if (!fechaActualRedux) {
       console.error(
         "❌ No se pudo obtener fecha desde Redux para verificar sincronización"
@@ -128,6 +128,96 @@ export class AsistenciaDePersonalValidator {
       diasEscolaresEntrada,
       diasEscolaresSalida,
     };
+  }
+
+  /**
+   * ✅ NUEVO: Valida consistencia entre cantidad de entradas y salidas
+   * Solo puede haber máximo 1 de diferencia (entrada sin salida del día actual)
+   */
+  public async validarConsistenciaEntradaSalida(
+    registroEntrada: AsistenciaMensualPersonalLocal | null,
+    registroSalida: AsistenciaMensualPersonalLocal | null,
+    mes: number,
+    id_o_dni: string | number
+  ): Promise<{
+    esConsistente: boolean;
+    diferencia: number;
+    cantidadEntradas: number;
+    cantidadSalidas: number;
+    razon: string;
+    requiereCorreccion: boolean;
+  }> {
+    try {
+      // Contar entradas
+      const cantidadEntradas = registroEntrada
+        ? Object.keys(registroEntrada.registros).length
+        : 0;
+
+      // Contar salidas
+      const cantidadSalidas = registroSalida
+        ? Object.keys(registroSalida.registros).length
+        : 0;
+
+      const diferencia = Math.abs(cantidadEntradas - cantidadSalidas);
+      const esConsistente = diferencia <= 1;
+
+      let razon = "";
+      let requiereCorreccion = false;
+
+      if (diferencia === 0) {
+        razon = `Perfecto: ${cantidadEntradas} entradas = ${cantidadSalidas} salidas`;
+      } else if (diferencia === 1) {
+        const mayor =
+          cantidadEntradas > cantidadSalidas ? "entradas" : "salidas";
+        razon = `Aceptable: 1 ${mayor} más (posiblemente día actual sin completar)`;
+      } else {
+        razon = `INCONSISTENTE: ${diferencia} de diferencia (${cantidadEntradas} entradas vs ${cantidadSalidas} salidas)`;
+        requiereCorreccion = true;
+      }
+
+      // Log detallado para debugging
+      if (!esConsistente) {
+        console.warn(
+          `⚠️ Inconsistencia detectada para ${id_o_dni} - mes ${mes}: ${razon}`
+        );
+
+        // Mostrar detalles de los días registrados
+        if (registroEntrada && cantidadEntradas > 0) {
+          const diasEntrada = Object.keys(registroEntrada.registros).sort(
+            (a, b) => parseInt(a) - parseInt(b)
+          );
+          console.warn(`📅 Días con entrada: ${diasEntrada.join(", ")}`);
+        }
+
+        if (registroSalida && cantidadSalidas > 0) {
+          const diasSalida = Object.keys(registroSalida.registros).sort(
+            (a, b) => parseInt(a) - parseInt(b)
+          );
+          console.warn(`📅 Días con salida: ${diasSalida.join(", ")}`);
+        }
+      }
+
+      return {
+        esConsistente,
+        diferencia,
+        cantidadEntradas,
+        cantidadSalidas,
+        razon,
+        requiereCorreccion,
+      };
+    } catch (error) {
+      console.error("Error al validar consistencia entrada/salida:", error);
+      return {
+        esConsistente: false,
+        diferencia: -1,
+        cantidadEntradas: 0,
+        cantidadSalidas: 0,
+        razon: `Error en validación: ${
+          error instanceof Error ? error.message : "Error desconocido"
+        }`,
+        requiereCorreccion: true,
+      };
+    }
   }
 
   /**

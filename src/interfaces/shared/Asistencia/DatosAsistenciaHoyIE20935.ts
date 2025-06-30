@@ -144,12 +144,14 @@ export interface ProfesorPrimariaAsistenciaResponse
   extends BaseAsistenciaResponse {
   HorarioTomaAsistenciaProfesorPrimaria: HorarioTomaAsistencia;
   HorarioEscolarPrimaria: HorarioTomaAsistencia;
+  Mi_DNI: string;
 }
 
 // Auxiliar gets their schedule and secondary level student schedule
 export interface AuxiliarAsistenciaResponse extends BaseAsistenciaResponse {
   HorarioTomaAsistenciaAuxiliares: HorarioTomaAsistencia;
   HorarioEscolarSecundaria: HorarioTomaAsistencia;
+  Mi_DNI: string;
 }
 
 // ProfesorSecundaria and Tutor get their own schedule from the list and secondary schedule
@@ -162,6 +164,7 @@ export interface ProfesorTutorSecundariaAsistenciaResponse
       }
     | false;
   HorarioEscolarSecundaria: HorarioTomaAsistencia;
+  Mi_DNI: string;
 }
 
 // Responsable gets both primary and secondary schedules
@@ -178,4 +181,5 @@ export interface PersonalAdministrativoAsistenciaResponse
         Horario_Laboral_Salida: Date;
       }
     | false;
+  Mi_DNI: string;
 }

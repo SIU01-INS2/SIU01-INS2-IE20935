@@ -12,12 +12,12 @@ const ControlAsistenciaPersonalMenu = () => {
         <Link
           href={"/control-asistencia-personal/tomar-asistencia"}
           as={"/control-asistencia-personal/tomar-asistencia"}
-          className="flex flex-1 shadow-[0_0_8px_5px_rgba(0,0,0,0.2)] hover:shadow-[0_0_12px_8px_rgba(0,0,0,0.25)]  transition-all duration-300 rounded-[12px] flex-col justify-center items-center gap-4 p-6 py-7 sxs-only:p-4 sxs-only:py-5 xs-only:p-5 xs-only:py-6 max-w-[min(25rem,80vw)] xl-only:max-w-[30rem] cursor-pointer hover:bg-gray-50"
+          className="group flex flex-1 siasis-shadow-card rounded-[12px] flex-col justify-center items-center gap-4 p-6 py-7 sxs-only:p-4 sxs-only:py-5 xs-only:p-5 xs-only:py-6 max-w-[min(25rem,80vw)] xl-only:max-w-[30rem] transform hover:-translate-y-1"
         >
           <img
             src="/images/svg/PersonalReloj.svg"
             alt="Personal con reloj en mano"
-            className="h-[5rem] sxs-only:h-[3.5rem] xs-only:h-[4rem] xl-only:h-[6rem] aspect-auto bg-cover  transition-transform duration-300"
+            className="h-[5rem] sxs-only:h-[3.5rem] xs-only:h-[4rem] xl-only:h-[6rem] aspect-auto bg-cover transition-transform duration-300 group-hover:scale-110"
           />
           <h2 className="text-center font-semibold text-[1.2rem] sxs-only:text-[1rem] xs-only:text-[1.1rem] xl-only:text-[1.4rem]">
             Toma de Asistencia de Personal
@@ -34,12 +34,12 @@ const ControlAsistenciaPersonalMenu = () => {
         <Link
           href={"/control-asistencia-personal/monitoreo"}
           as={"/control-asistencia-personal/monitoreo"}
-          className="flex flex-1 shadow-[0_0_8px_5px_rgba(0,0,0,0.2)] hover:shadow-[0_0_12px_8px_rgba(0,0,0,0.25)]  transition-all duration-300 rounded-[12px] flex-col justify-center items-center gap-4 p-6 py-7 sxs-only:p-4 sxs-only:py-5 xs-only:p-5 xs-only:py-6 max-w-[min(25rem,80vw)] xl-only:max-w-[30rem] cursor-pointer hover:bg-gray-50"
+          className="group flex flex-1 siasis-shadow-card rounded-[12px] flex-col justify-center items-center gap-4 p-6 py-7 sxs-only:p-4 sxs-only:py-5 xs-only:p-5 xs-only:py-6 max-w-[min(25rem,80vw)] xl-only:max-w-[30rem] transform hover:-translate-y-1"
         >
           <img
             src="/images/svg/PersonaMonitoreando.svg"
             alt="Personal Monitoreando"
-            className="h-[5rem] sxs-only:h-[3.5rem] xs-only:h-[4rem] xl-only:h-[6rem] aspect-auto bg-cover  transition-transform duration-300"
+            className="h-[5rem] sxs-only:h-[3.5rem] xs-only:h-[4rem] xl-only:h-[6rem] aspect-auto bg-cover transition-transform duration-300 group-hover:scale-110"
           />
           <h2 className="text-center font-semibold text-[1.2rem] sxs-only:text-[1rem] xs-only:text-[1.1rem] xl-only:text-[1.4rem]">
             Monitoreo de Asistencia del Personal
