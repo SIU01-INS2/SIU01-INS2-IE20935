@@ -54,6 +54,17 @@ interface ModoActual {
   razon: string;
 }
 
+interface MensajeInformativo {
+  mostrar: boolean;
+  texto: string;
+  tipo:
+    | "sin-horario"
+    | "dia-evento"
+    | "fuera-año"
+    | "fin-semana"
+    | "fecha-no-disponible";
+}
+
 // ✅ CONSTANTES
 const RETRY_HORARIO_MS = 30000; // 30 segundos
 
@@ -81,6 +92,124 @@ const selectSidebar = (state: RootState) => ({
   isOpen: state.flags.sidebarIsOpen,
 });
 
+// ✅ COMPONENTE DE MENSAJE INFORMATIVO REUTILIZABLE
+const MensajeInformativoAsistencia = memo(
+  ({
+    mensaje,
+    onCerrar,
+    navbarHeight,
+  }: {
+    mensaje: MensajeInformativo;
+    onCerrar: () => void;
+    navbarHeight: number;
+  }) => {
+    const { delegarEvento } = useDelegacionEventos();
+
+    useEffect(() => {
+      if (!delegarEvento) return;
+
+      // Usar delegación de eventos para cerrar al hacer click fuera
+      delegarEvento(
+        "mousedown",
+        "body",
+        (event: Event) => {
+          const target = event.target as HTMLElement;
+          if (!target.closest("#mensaje-informativo-asistencia")) {
+            onCerrar();
+          }
+        },
+        true
+      );
+    }, [delegarEvento, onCerrar]);
+
+    if (!mensaje.mostrar) return null;
+
+    return (
+      <div
+        className="fixed inset-0 bg-black/20 backdrop-blur-sm z-[101] flex items-center justify-center px-4"
+        style={{ paddingBottom: navbarHeight + 12 }}
+      >
+        <div
+          id="mensaje-informativo-asistencia"
+          className="bg-white rounded-2xl shadow-2xl border border-gray-200 p-6 
+                   sxs-only:w-[90%] sxs-only:max-w-none sxs-only:p-4
+                   xs-only:w-[85%] xs-only:max-w-none xs-only:p-5
+                   sm-only:w-[80%] sm-only:max-w-md
+                   w-full max-w-lg
+                   relative animate-in fade-in-0 zoom-in-95 duration-300"
+        >
+          {/* Botón cerrar */}
+          <button
+            onClick={onCerrar}
+            className="absolute top-3 right-3 w-8 h-8 rounded-full bg-gray-100 hover:bg-gray-200 
+                     flex items-center justify-center transition-colors duration-200
+                     text-gray-500 hover:text-gray-700"
+            title="Cerrar"
+          >
+            <svg
+              className="w-4 h-4"
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2}
+                d="M6 18L18 6M6 6l12 12"
+              />
+            </svg>
+          </button>
+
+          {/* Contenido */}
+          <div className="pr-8">
+            <div className="flex items-center gap-3 mb-4">
+              <div className="w-12 h-12 rounded-full bg-blue-100 flex items-center justify-center flex-shrink-0">
+                <svg
+                  className="w-6 h-6 text-blue-600"
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
+                  />
+                </svg>
+              </div>
+              <div>
+                <h3 className="text-lg font-semibold text-gray-900 mb-1">
+                  Información de Asistencia
+                </h3>
+                <p className="text-sm text-gray-600">I.E. 20935 Asunción 8</p>
+              </div>
+            </div>
+
+            <p
+              className="text-gray-700 leading-relaxed
+                        sxs-only:text-sm 
+                        xs-only:text-sm
+                        text-base"
+            >
+              {mensaje.texto}
+            </p>
+
+            <div className="mt-6 pt-4 border-t border-gray-100">
+              <p className="text-xs text-gray-500 text-center">
+                Este mensaje se muestra solo una vez por sesión
+              </p>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+);
+
+MensajeInformativoAsistencia.displayName = "MensajeInformativoAsistencia";
+
 const MarcarAsistenciaDePersonalButton = memo(
   ({ rol }: { rol: RolesSistema }) => {
     const { delegarEvento } = useDelegacionEventos();
@@ -104,6 +233,18 @@ const MarcarAsistenciaDePersonalButton = memo(
       color: "verde",
       tooltip: "",
     });
+
+    // ✅ NUEVO: Estado para mensaje informativo
+    const [mensajeInformativo, setMensajeInformativo] =
+      useState<MensajeInformativo>({
+        mostrar: false,
+        texto: "",
+        tipo: "sin-horario",
+      });
+
+    // ✅ NUEVO: Estado para el handler base
+    const [handlerBase, setHandlerBase] =
+      useState<HandlerAsistenciaBase | null>(null);
 
     // ===================================================================================
     //                         Variables de estado para modales
@@ -152,7 +293,7 @@ const MarcarAsistenciaDePersonalButton = memo(
     const retryRef = useRef<NodeJS.Timeout | null>(null);
     const ultimoModoConsultado = useRef<ModoRegistro | null>(null);
 
-    // ✅ TOOLTIP MANAGEMENT
+    // ✅ TOOLTIP MANAGEMENT (Reutilizado para mensaje informativo)
     const [tooltipOculto, setTooltipOculto] = useState(() => {
       if (typeof window !== "undefined") {
         return (
@@ -177,6 +318,16 @@ const MarcarAsistenciaDePersonalButton = memo(
       sessionStorage.setItem(
         SE_MOSTRO_TOLTIP_TOMAR_ASISTENCIA_PERSONAL_KEY,
         "false"
+      );
+    }, []);
+
+    // ✅ NUEVO: Funciones para manejar mensaje informativo
+    const ocultarMensajeInformativo = useCallback(() => {
+      setMensajeInformativo((prev) => ({ ...prev, mostrar: false }));
+      // Usar las mismas constantes que el tooltip
+      sessionStorage.setItem(
+        SE_MOSTRO_TOLTIP_TOMAR_ASISTENCIA_PERSONAL_KEY,
+        "true"
       );
     }, []);
 
@@ -210,6 +361,83 @@ const MarcarAsistenciaDePersonalButton = memo(
 
       return fecha;
     }, []);
+
+    // ✅ NUEVO: Verificar condiciones especiales (CON VERIFICACIÓN DE FECHAS)
+    const verificarCondicionesEspeciales = useCallback((): string | null => {
+      if (!handlerBase) return null;
+
+      console.log("🔍 VERIFICANDO CONDICIONES ESPECIALES...");
+
+      // 1. Fuera del año escolar (prioridad más alta)
+      const fueraAño = handlerBase.estaFueraDeAnioEscolar();
+      if (fueraAño) {
+        console.log("🚫 FUERA DEL AÑO ESCOLAR");
+        return "Fuera del periode escolar, no se registra asistencia";
+      }
+
+      // 2. Día de evento
+      const diaEvento = handlerBase.esHoyDiaDeEvento();
+      if (diaEvento) {
+        console.log("🚫 DÍA DE EVENTO:", diaEvento.Nombre);
+        return `Hoy es ${diaEvento.Nombre}, no se registra asistencia`;
+      }
+
+      // 3. ✅ VERIFICACIÓN DE FECHAS (fechaLocalPeru < fechaRedux)
+      const fechaRedux = obtenerFechaActual();
+      if (fechaRedux) {
+        const fechaLocalPeru = handlerBase.getFechaLocalPeru();
+
+        console.log("🕐 VERIFICANDO FECHAS PARA REGISTRO:", {
+          fechaLocalPeru: fechaLocalPeru.toISOString(),
+          fechaRedux: fechaRedux.toISOString(),
+          fechaLocalPeruFecha: fechaLocalPeru.toDateString(),
+          fechaReduxFecha: fechaRedux.toDateString(),
+        });
+
+        // Comparar solo fechas (sin horas)
+        const fechaReduxSinHora = new Date(
+          fechaRedux.getFullYear(),
+          fechaRedux.getMonth(),
+          fechaRedux.getDate()
+        );
+        const fechaPeruSinHora = new Date(
+          fechaLocalPeru.getFullYear(),
+          fechaLocalPeru.getMonth(),
+          fechaLocalPeru.getDate()
+        );
+
+        console.log("📅 COMPARACIÓN DE FECHAS:", {
+          fechaPeruSinHora: fechaPeruSinHora.toISOString(),
+          fechaReduxSinHora: fechaReduxSinHora.toISOString(),
+          esFechaPeruMenor: fechaPeruSinHora < fechaReduxSinHora,
+          diferenciaDias: Math.floor(
+            (fechaReduxSinHora.getTime() - fechaPeruSinHora.getTime()) /
+              (1000 * 60 * 60 * 24)
+          ),
+        });
+
+        if (fechaPeruSinHora < fechaReduxSinHora) {
+          console.log("🚫 FECHA LOCAL MENOR - Mostrando mensaje de espera");
+          return "Aun no puedes registrar tu asistencia";
+        }
+
+        // 4. Fin de semana (después de verificar fechas)
+        const diaSemana = fechaRedux.getDay(); // 0=domingo, 1=lunes, ..., 6=sábado
+        if (diaSemana === 0) {
+          // Domingo
+          console.log("🚫 ES DOMINGO");
+          return "Hoy es domingo, no se registra asistencia";
+        }
+        if (diaSemana === 6) {
+          // Sábado
+          console.log("🚫 ES SÁBADO");
+          return "Hoy es sábado, no se registra asistencia";
+        }
+      }
+
+      console.log("✅ NO HAY CONDICIONES ESPECIALES");
+      return null;
+    }, [handlerBase, obtenerFechaActual]);
 
     // ✅ FUNCIÓN: Determinar modo actual basado en horario y fecha
     const determinarModoActual = useCallback(
@@ -391,6 +619,9 @@ const MarcarAsistenciaDePersonalButton = memo(
           return;
         }
 
+        // ✅ NUEVO: Guardar el handler base para verificaciones
+        setHandlerBase(handler);
+
         let nuevoHorario: HorarioTomaAsistencia | null = null;
 
         switch (rol) {
@@ -433,9 +664,10 @@ const MarcarAsistenciaDePersonalButton = memo(
           setHorario(nuevoHorario);
           console.log(`✅ Horario obtenido para ${rol}:`, nuevoHorario);
         } else {
-          console.warn("Horario no disponible, reintentando...");
-          if (retryRef.current) clearTimeout(retryRef.current);
-          retryRef.current = setTimeout(obtenerHorario, RETRY_HORARIO_MS);
+          console.warn(
+            "Horario no disponible, El usuario no registra asistencia hoy..."
+          );
+          setHorario(null); // Importante: establecer null explícitamente
         }
       } catch (error) {
         console.error("Error al obtener horario:", error);
@@ -446,6 +678,31 @@ const MarcarAsistenciaDePersonalButton = memo(
 
     // ✅ FUNCIÓN: Actualizar estado del botón
     const actualizarEstadoBoton = useCallback(() => {
+      // ✅ NUEVO: Verificar condiciones especiales primero
+      const condicionEspecial = verificarCondicionesEspeciales();
+      if (condicionEspecial) {
+        console.log("🚫 Condición especial detectada:", condicionEspecial);
+        setEstadoBoton({
+          visible: false,
+          tipo: null,
+          color: "verde",
+          tooltip: "",
+        });
+        return;
+      }
+
+      // ✅ NUEVO: Verificar si no hay horario (después de condiciones especiales)
+      if (handlerBase && !horario) {
+        console.log("🚫 Sin horario disponible");
+        setEstadoBoton({
+          visible: false,
+          tipo: null,
+          color: "verde",
+          tooltip: "",
+        });
+        return;
+      }
+
       const modoActual = determinarModoActual(horario);
 
       console.log("🎯 MODO ACTUAL:", modoActual);
@@ -481,7 +738,6 @@ const MarcarAsistenciaDePersonalButton = memo(
       // ✅ MOSTRAR BOTÓN CON EL MODO ACTUAL
       const esEntrada = modoActual.tipo === ModoRegistro.Entrada;
       const color = esEntrada ? "verde" : "rojizo";
-      // const emoji = esEntrada ? "🚪➡️" : "🚪⬅️";
 
       console.log(`👁️ Mostrando botón para ${modoActual.tipo}`);
 
@@ -493,13 +749,60 @@ const MarcarAsistenciaDePersonalButton = memo(
       });
     }, [
       horario,
+      handlerBase,
       asistencia.entradaMarcada,
       asistencia.salidaMarcada,
       determinarModoActual,
+      verificarCondicionesEspeciales,
     ]);
+
+    // ✅ NUEVO: Verificar y mostrar mensaje informativo
+    const verificarMensajeInformativo = useCallback(() => {
+      // Solo mostrar si no se ha mostrado antes en esta sesión
+      if (tooltipOculto) return;
+
+      // Verificar condiciones en orden de prioridad
+      const condicionEspecial = verificarCondicionesEspeciales();
+      if (condicionEspecial) {
+        let tipo: MensajeInformativo["tipo"] = "sin-horario";
+
+        if (condicionEspecial.includes("Fuera del periode")) {
+          tipo = "fuera-año";
+        } else if (
+          condicionEspecial.includes("domingo") ||
+          condicionEspecial.includes("sábado")
+        ) {
+          tipo = "fin-semana";
+        } else if (condicionEspecial.includes("Aun no puedes")) {
+          tipo = "fecha-no-disponible";
+        } else if (condicionEspecial.includes("no se registra asistencia")) {
+          tipo = "dia-evento";
+        }
+
+        setMensajeInformativo({
+          mostrar: true,
+          texto: condicionEspecial,
+          tipo,
+        });
+        return;
+      }
+
+      // Verificar si no hay horario
+      if (handlerBase && !horario) {
+        setMensajeInformativo({
+          mostrar: true,
+          texto: "No hay asistencia que debas registrar hoy",
+          tipo: "sin-horario",
+        });
+        return;
+      }
+    }, [tooltipOculto, verificarCondicionesEspeciales, handlerBase, horario]);
 
     // ✅ FUNCIÓN: Consulta periódica inteligente (INDEPENDIENTE de Redux)
     const consultaPeriodicaInteligente = useCallback(() => {
+      // No ejecutar si hay mensaje informativo
+      if (mensajeInformativo.mostrar) return;
+
       const modoActual = determinarModoActual(horario);
 
       if (!modoActual.activo || !modoActual.tipo) {
@@ -530,6 +833,7 @@ const MarcarAsistenciaDePersonalButton = memo(
         "consulta periódica inteligente"
       );
     }, [
+      mensajeInformativo.mostrar,
       horario,
       asistencia.entradaMarcada,
       asistencia.salidaMarcada,
@@ -549,10 +853,10 @@ const MarcarAsistenciaDePersonalButton = memo(
     }, []);
 
     useEffect(() => {
-      if (!horario) {
+      if (!horario && !handlerBase) {
         obtenerHorario();
       } else {
-        console.log("📋 HORARIO YA DISPONIBLE, MOSTRANDO CONSTANTES:", {
+        console.log("📋 HORARIO/HANDLER YA DISPONIBLE, MOSTRANDO CONSTANTES:", {
           HORAS_ANTES_INICIO_ACTIVACION,
           HORAS_ANTES_SALIDA_CAMBIO_MODO,
           HORAS_DESPUES_SALIDA_LIMITE,
@@ -561,7 +865,14 @@ const MarcarAsistenciaDePersonalButton = memo(
             " minutos",
         });
       }
-    }, [horario, obtenerHorario]);
+    }, [horario, handlerBase, obtenerHorario]);
+
+    // ✅ NUEVO: Verificar mensaje informativo cuando se obtiene handler/horario
+    useEffect(() => {
+      if (handlerBase && reduxInicializado) {
+        verificarMensajeInformativo();
+      }
+    }, [handlerBase, horario, reduxInicializado, verificarMensajeInformativo]);
 
     // ✅ CONSULTA INICIAL cuando se obtiene el horario Y Redux está inicializado
     useEffect(() => {
@@ -569,10 +880,20 @@ const MarcarAsistenciaDePersonalButton = memo(
         horario: !!horario,
         inicializadoAsistencia: asistencia.inicializado,
         reduxInicializado,
-        debeEjecutar: horario && !asistencia.inicializado && reduxInicializado,
+        mensajeInformativo: mensajeInformativo.mostrar,
+        debeEjecutar:
+          horario &&
+          !asistencia.inicializado &&
+          reduxInicializado &&
+          !mensajeInformativo.mostrar,
       });
 
-      if (horario && !asistencia.inicializado && reduxInicializado) {
+      if (
+        horario &&
+        !asistencia.inicializado &&
+        reduxInicializado &&
+        !mensajeInformativo.mostrar
+      ) {
         console.log("🚀 INICIANDO CONSULTA INICIAL... (Redux ya inicializado)");
 
         const modoActual = determinarModoActual(horario);
@@ -599,24 +920,32 @@ const MarcarAsistenciaDePersonalButton = memo(
           console.log("⏭️ Ya inicializado, no ejecutar consulta inicial");
         if (!reduxInicializado)
           console.log("⏭️ Redux no inicializado, esperando...");
+        if (mensajeInformativo.mostrar)
+          console.log("⏭️ Mensaje informativo activo, no consultar");
       }
     }, [
       horario,
       asistencia.inicializado,
       reduxInicializado,
+      mensajeInformativo.mostrar,
       consultarAsistenciaModo,
       determinarModoActual,
     ]);
 
     // ✅ ACTUALIZAR ESTADO DEL BOTÓN - Solo depende de datos ESTABLES
     useEffect(() => {
-      if (asistencia.inicializado && reduxInicializado) {
+      if (
+        (asistencia.inicializado || (handlerBase && !horario)) &&
+        reduxInicializado
+      ) {
         actualizarEstadoBoton();
       } else {
         console.log(
           "⏭️ No actualizar estado del botón - Esperando inicialización:",
           {
             asistenciaInicializada: asistencia.inicializado,
+            handlerDisponible: !!handlerBase,
+            horarioDisponible: !!horario,
             reduxInicializado,
           }
         );
@@ -626,13 +955,20 @@ const MarcarAsistenciaDePersonalButton = memo(
       asistencia.entradaMarcada,
       asistencia.salidaMarcada,
       horario,
+      handlerBase,
       reduxInicializado,
       actualizarEstadoBoton,
     ]);
 
     // ✅ CONSULTA CADA 5 MINUTOS - INTERVALO INDEPENDIENTE
     useEffect(() => {
-      if (!asistencia.inicializado || !horario || !reduxInicializado) return;
+      if (
+        !asistencia.inicializado ||
+        !horario ||
+        !reduxInicializado ||
+        mensajeInformativo.mostrar
+      )
+        return;
 
       console.log(
         `⏰ Configurando consulta cada ${
@@ -656,6 +992,7 @@ const MarcarAsistenciaDePersonalButton = memo(
       asistencia.inicializado,
       horario,
       reduxInicializado,
+      mensajeInformativo.mostrar,
       consultaPeriodicaInteligente,
     ]);
 
@@ -665,7 +1002,8 @@ const MarcarAsistenciaDePersonalButton = memo(
         !horaMinutoActual ||
         !asistencia.inicializado ||
         !horario ||
-        !reduxInicializado
+        !reduxInicializado ||
+        mensajeInformativo.mostrar
       )
         return;
 
@@ -700,6 +1038,7 @@ const MarcarAsistenciaDePersonalButton = memo(
       asistencia.inicializado,
       horario,
       reduxInicializado,
+      mensajeInformativo.mostrar,
       consultarAsistenciaModo,
       determinarModoActual,
     ]);
@@ -722,7 +1061,8 @@ const MarcarAsistenciaDePersonalButton = memo(
           document.visibilityState === "visible" &&
           asistencia.inicializado &&
           horario &&
-          reduxInicializado
+          reduxInicializado &&
+          !mensajeInformativo.mostrar
         ) {
           console.log("👁️ Pestaña visible, verificando modo actual");
           const modoActual = determinarModoActual(horario);
@@ -749,16 +1089,17 @@ const MarcarAsistenciaDePersonalButton = memo(
       asistencia.salidaMarcada,
       horario,
       reduxInicializado,
+      mensajeInformativo.mostrar,
       consultarAsistenciaModo,
       determinarModoActual,
     ]);
 
-    // ✅ MOSTRAR TOOLTIP AL CAMBIAR TIPO
+    // ✅ MOSTRAR TOOLTIP AL CAMBIAR TIPO (solo si no hay mensaje informativo)
     useEffect(() => {
-      if (estadoBoton.tipo) {
+      if (estadoBoton.tipo && !mensajeInformativo.mostrar) {
         mostrarTooltip();
       }
-    }, [estadoBoton.tipo, mostrarTooltip]);
+    }, [estadoBoton.tipo, mensajeInformativo.mostrar, mostrarTooltip]);
 
     // ✅ HANDLE CLICK
     const handleClick = useCallback(() => {
@@ -837,20 +1178,25 @@ const MarcarAsistenciaDePersonalButton = memo(
       }
     }, [estadoBoton.tipo, horario, obtenerFechaActual, asistenciaIDB]);
 
-    // ✅ RENDER: Solo si es visible
-    if (!estadoBoton.visible) {
-      return null;
-    }
-
-    const mostrarTooltipActual = !tooltipOculto;
+    // ✅ RENDER: Mensaje informativo o botón
+    const mostrarTooltipActual = !tooltipOculto && !mensajeInformativo.mostrar;
 
     return (
       <>
+        {/* ✅ NUEVO: Mensaje informativo */}
+        {mensajeInformativo.mostrar && (
+          <MensajeInformativoAsistencia
+            mensaje={mensajeInformativo}
+            onCerrar={ocultarMensajeInformativo}
+            navbarHeight={sidebar.height}
+          />
+        )}
+
         {mostrarModalTomarMiAsistencia && (
           <MarcarAsistenciaPropiaDePersonalModal
             eliminateModal={() => setMostrarModalTomarMiAsistencia(false)}
             modoRegistro={determinarModoActual(horario).tipo!}
-            marcarMiAsistenciaDeHoy={marcarMiAsistenciaDeHoy} // Nueva prop
+            marcarMiAsistenciaDeHoy={marcarMiAsistenciaDeHoy}
             setMostrarModalConfirmacioAsistenciaMarcada={
               setMostrarModalConfirmacioAsistenciaMarcada
             }
@@ -868,8 +1214,8 @@ const MarcarAsistenciaDePersonalButton = memo(
             }
             setMostrarModalNoSePuedeUsarLaptop={
               setMostrarModalNoSePuedeUsarLaptop
-            } // Nueva prop
-            setMostrarModalDispositivoSinGPS={setMostrarModalDispositivoSinGPS} // Nueva prop
+            }
+            setMostrarModalDispositivoSinGPS={setMostrarModalDispositivoSinGPS}
           />
         )}
 
@@ -883,6 +1229,7 @@ const MarcarAsistenciaDePersonalButton = memo(
 
         {mostrarModalFaltaActivarGPSoBrindarPermisosGPS && (
           <ActivarGPSoBrindarPermisosGPSModal
+            modoRegistro={estadoBoton.tipo!}
             eliminateModal={() => {
               setMostrarModalFaltaActivarGPSoBrindarPermisosGPS(false);
             }}
@@ -931,7 +1278,7 @@ const MarcarAsistenciaDePersonalButton = memo(
           {`
         @keyframes Modificar-Bottom-NavBarFooter {
             to {
-                bottom: ${sidebar.isOpen ? `${sidebar.height}px` : "0px"};
+                bottom: ${sidebar.isOpen ? `${sidebar.height + 12}px` : "12px"};
             }
         }
         .Mover-NavBarFooter {
@@ -958,15 +1305,15 @@ const MarcarAsistenciaDePersonalButton = memo(
             0%, 100% {
                 transform: scale(1);
                 box-shadow:
-                    0 10px 30px rgba(0, 0, 0, 0.25),
-                    0 4px 12px 4px rgba(34, 197, 94, 0.4),
+                    0 6px 20px rgba(0, 0, 0, 0.2),
+                    0 2px 8px 2px rgba(34, 197, 94, 0.3),
                     inset 0 1px 0 rgba(255, 255, 255, 0.2);
             }
             50% {
                 transform: scale(1.05);
                 box-shadow:
-                    0 15px 40px rgba(0, 0, 0, 0.3),
-                    0 6px 20px 6px rgba(34, 197, 94, 0.6),
+                    0 8px 25px rgba(0, 0, 0, 0.25),
+                    0 3px 12px 3px rgba(34, 197, 94, 0.4),
                     inset 0 1px 0 rgba(255, 255, 255, 0.3);
             }
         }
@@ -975,151 +1322,206 @@ const MarcarAsistenciaDePersonalButton = memo(
             0%, 100% {
                 transform: scale(1);
                 box-shadow:
-                    0 10px 30px rgba(0, 0, 0, 0.25),
-                    0 4px 12px 4px rgba(239, 68, 68, 0.4),
+                    0 6px 20px rgba(0, 0, 0, 0.2),
+                    0 2px 8px 2px rgba(239, 68, 68, 0.3),
                     inset 0 1px 0 rgba(255, 255, 255, 0.2);
             }
             50% {
                 transform: scale(1.05);
                 box-shadow:
-                    0 15px 40px rgba(0, 0, 0, 0.3),
-                    0 6px 20px 6px rgba(239, 68, 68, 0.6),
+                    0 8px 25px rgba(0, 0, 0, 0.25),
+                    0 3px 12px 3px rgba(239, 68, 68, 0.4),
                     inset 0 1px 0 rgba(255, 255, 255, 0.3);
+            }
+        }
+
+        /* ✅ NUEVOS: Estilos para móviles con sombra reducida y más separación */
+        @media (max-width: 300px) {
+            .button-enhanced-verde {
+                animation: buttonPulse 3s ease-in-out infinite;
+                box-shadow:
+                    0 4px 15px rgba(0, 0, 0, 0.15),
+                    0 1px 6px 1px rgba(34, 197, 94, 0.25),
+                    inset 0 1px 0 rgba(255, 255, 255, 0.2) !important;
+            }
+            .button-enhanced-rojizo {
+                animation: buttonPulseRojo 3s ease-in-out infinite;
+                box-shadow:
+                    0 4px 15px rgba(0, 0, 0, 0.15),
+                    0 1px 6px 1px rgba(239, 68, 68, 0.25),
+                    inset 0 1px 0 rgba(255, 255, 255, 0.2) !important;
+            }
+        }
+
+        @media (min-width: 300px) and (max-width: 499px) {
+            .button-enhanced-verde {
+                animation: buttonPulse 3s ease-in-out infinite;
+                box-shadow:
+                    0 4px 15px rgba(0, 0, 0, 0.15),
+                    0 1px 6px 1px rgba(34, 197, 94, 0.25),
+                    inset 0 1px 0 rgba(255, 255, 255, 0.2) !important;
+            }
+            .button-enhanced-rojizo {
+                animation: buttonPulseRojo 3s ease-in-out infinite;
+                box-shadow:
+                    0 4px 15px rgba(0, 0, 0, 0.15),
+                    0 1px 6px 1px rgba(239, 68, 68, 0.25),
+                    inset 0 1px 0 rgba(255, 255, 255, 0.2) !important;
+            }
+        }
+
+        @media (min-width: 500px) and (max-width: 767px) {
+            .button-enhanced-verde {
+                animation: buttonPulse 3s ease-in-out infinite;
+                box-shadow:
+                    0 4px 15px rgba(0, 0, 0, 0.15),
+                    0 1px 6px 1px rgba(34, 197, 94, 0.25),
+                    inset 0 1px 0 rgba(255, 255, 255, 0.2) !important;
+            }
+            .button-enhanced-rojizo {
+                animation: buttonPulseRojo 3s ease-in-out infinite;
+                box-shadow:
+                    0 4px 15px rgba(0, 0, 0, 0.15),
+                    0 1px 6px 1px rgba(239, 68, 68, 0.25),
+                    inset 0 1px 0 rgba(255, 255, 255, 0.2) !important;
+            }
+        }
+
+        /* Estilos originales para pantallas grandes */
+        @media (min-width: 768px) {
+            .button-enhanced-verde {
+                animation: buttonPulse 3s ease-in-out infinite;
+            }
+            .button-enhanced-rojizo {
+                animation: buttonPulseRojo 3s ease-in-out infinite;
             }
         }
 
         .tooltip-animation {
             animation: tooltipFadeIn 0.4s ease-out, tooltipPulse 2s ease-in-out infinite 1s;
         }
-
-        .button-enhanced-verde {
-            position: relative;
-            animation: buttonPulse 3s ease-in-out infinite;
-        }
-
-        .button-enhanced-rojizo {
-            position: relative;
-            animation: buttonPulseRojo 3s ease-in-out infinite;
-        }
         `}
         </style>
 
-        <div
-          className="fixed z-[102] right-0 Mover-NavBarFooter
-                   sxs-only:mr-3 sxs-only:mb-3
-                   xs-only:mr-4 xs-only:mb-4
-                   max-sm:mr-5 max-sm:mb-4
-                   mr-6 mb-5"
-          style={{ bottom: sidebar.height }}
-        >
-          {/* Tooltip */}
-          {mostrarTooltipActual && (
-            <div
-              id="tooltip-mostrar-asistencia-personal"
-              className="absolute tooltip-animation
-                       sxs-only:right-14 sxs-only:top-1
-                       xs-only:right-16 xs-only:top-2
-                       max-sm:right-18 max-sm:top-2
-                       right-20 top-3"
-            >
-              <div
-                className={`${
-                  estadoBoton.color === "verde"
-                    ? "bg-azul-principal"
-                    : "bg-red-600"
-                } text-white px-3 py-2 rounded-lg text-sm font-medium shadow-lg relative
-                         sxs-only:px-2 sxs-only:py-1 sxs-only:text-xs
-                         xs-only:px-2 xs-only:py-1 xs-only:text-xs
-                         max-sm:px-3 max-sm:py-2 max-sm:text-sm
-                         whitespace-nowrap transition-all duration-300`}
-              >
-                {estadoBoton.tooltip}
-                <div
-                  className={`absolute top-1/2 transform -translate-y-1/2
-                         left-full border-l-4 border-y-4 border-y-transparent ${
-                           estadoBoton.color === "verde"
-                             ? "border-l-azul-principal"
-                             : "border-l-red-600"
-                         }`}
-                ></div>
-              </div>
-            </div>
-          )}
-
-          {/* Botón */}
-          <button
-            onClick={handleClick}
-            title={`Registrar ${estadoBoton.tipo}`}
-            className={`${
-              mostrarTooltipActual
-                ? estadoBoton.color === "verde"
-                  ? "button-enhanced-verde"
-                  : "button-enhanced-rojizo"
-                : "transition-all duration-300"
-            }
-                   relative overflow-hidden aspect-square
-                   ${
-                     estadoBoton.color === "verde"
-                       ? "bg-gradient-to-br from-verde-principal to-green-600 hover:from-green-500 hover:to-green-700"
-                       : "bg-gradient-to-br from-red-500 to-red-700 hover:from-red-600 hover:to-red-800"
-                   }
-                   rounded-full flex items-center justify-center
-                   transition-all duration-300 ease-out
-                   hover:scale-110 active:scale-95
-                   shadow-[0_6px_20px_rgba(0,0,0,0.3),0_2px_8px_rgba(34,197,94,0.4),inset_0_1px_0_rgba(255,255,255,0.2)]
-                   hover:shadow-[0_10px_30px_rgba(0,0,0,0.35),0_4px_15px_rgba(34,197,94,0.5),inset_0_1px_0_rgba(255,255,255,0.3)]
-                   border-2 border-green-400/20
-                   sxs-only:w-12 sxs-only:h-12 sxs-only:p-2
-                   xs-only:w-14 xs-only:h-14 xs-only:p-3
-                   max-sm:w-16 max-sm:h-16 max-sm:p-3
-                   w-18 h-18 p-4`}
+        {/* ✅ BOTÓN: Solo mostrar si es visible y no hay mensaje informativo */}
+        {estadoBoton.visible && !mensajeInformativo.mostrar && (
+          <div
+            className="fixed z-[102] right-0 Mover-NavBarFooter
+                     sxs-only:mr-3 sxs-only:mb-3
+                     xs-only:mr-4 xs-only:mb-4
+                     sm-only:mr-5 sm-only:mb-4
+                     mr-6 mb-5"
+            style={{ bottom: sidebar.height + 12 }}
           >
-            {/* Efecto de brillo en hover */}
-            <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/20 to-transparent -skew-x-12 transform -translate-x-full hover:translate-x-full transition-transform duration-700"></div>
-
-            <LapizFirmando className="text-white relative z-10 drop-shadow-sm sxs-only:w-6 xs-only:w-7 max-sm:w-8 w-8" />
-
-            {/* Punto de notificación cuando hay tooltip */}
+            {/* Tooltip */}
             {mostrarTooltipActual && (
               <div
-                className={`absolute -top-1 -right-1 w-3 h-3 rounded-full border-2 border-white animate-ping
-                       sxs-only:w-2 sxs-only:h-2 ${
-                         estadoBoton.color === "verde"
-                           ? "bg-blue-500"
-                           : "bg-yellow-500"
-                       }`}
-              />
+                id="tooltip-mostrar-asistencia-personal"
+                className="absolute tooltip-animation
+                         sxs-only:right-14 sxs-only:top-1
+                         xs-only:right-16 xs-only:top-2
+                         sm-only:right-18 sm-only:top-2
+                         right-20 top-3"
+              >
+                <div
+                  className={`${
+                    estadoBoton.color === "verde"
+                      ? "bg-azul-principal"
+                      : "bg-red-600"
+                  } text-white px-3 py-2 rounded-lg text-sm font-medium shadow-lg relative
+                           sxs-only:px-2 sxs-only:py-1 sxs-only:text-xs
+                           xs-only:px-2 xs-only:py-1 xs-only:text-xs
+                           sm-only:px-3 sm-only:py-2 sm-only:text-sm
+                           whitespace-nowrap transition-all duration-300`}
+                >
+                  {estadoBoton.tooltip}
+                  <div
+                    className={`absolute top-1/2 transform -translate-y-1/2
+                           left-full border-l-4 border-y-4 border-y-transparent ${
+                             estadoBoton.color === "verde"
+                               ? "border-l-azul-principal"
+                               : "border-l-red-600"
+                           }`}
+                  ></div>
+                </div>
+              </div>
             )}
 
-            {/* Indicadores de estado */}
-            <div className="absolute -bottom-1 -left-1 flex space-x-1">
-              <div
-                className={`w-2 h-2 rounded-full border border-white transition-all ${
-                  asistencia.entradaMarcada
-                    ? "bg-green-400 scale-110"
-                    : "bg-gray-400"
-                }`}
-                title={
-                  asistencia.entradaMarcada
-                    ? "Entrada registrada"
-                    : "Entrada pendiente"
-                }
-              />
-              <div
-                className={`w-2 h-2 rounded-full border border-white transition-all ${
-                  asistencia.salidaMarcada
-                    ? "bg-green-400 scale-110"
-                    : "bg-gray-400"
-                }`}
-                title={
-                  asistencia.salidaMarcada
-                    ? "Salida registrada"
-                    : "Salida pendiente"
-                }
-              />
-            </div>
-          </button>
-        </div>
+            {/* Botón */}
+            <button
+              onClick={handleClick}
+              title={`Registrar ${estadoBoton.tipo}`}
+              className={`${
+                mostrarTooltipActual
+                  ? estadoBoton.color === "verde"
+                    ? "button-enhanced-verde"
+                    : "button-enhanced-rojizo"
+                  : "transition-all duration-300"
+              }
+                     relative overflow-hidden aspect-square
+                     ${
+                       estadoBoton.color === "verde"
+                         ? "bg-gradient-to-br from-verde-principal to-green-600 hover:from-green-500 hover:to-green-700"
+                         : "bg-gradient-to-br from-red-500 to-red-700 hover:from-red-600 hover:to-red-800"
+                     }
+                     rounded-full flex items-center justify-center
+                     transition-all duration-300 ease-out
+                     hover:scale-110 active:scale-95
+                     shadow-[0_6px_20px_rgba(0,0,0,0.3),0_2px_8px_rgba(34,197,94,0.4),inset_0_1px_0_rgba(255,255,255,0.2)]
+                     hover:shadow-[0_10px_30px_rgba(0,0,0,0.35),0_4px_15px_rgba(34,197,94,0.5),inset_0_1px_0_rgba(255,255,255,0.3)]
+                     border-2 border-green-400/20
+                     sxs-only:w-12 sxs-only:h-12 sxs-only:p-2
+                     xs-only:w-14 xs-only:h-14 xs-only:p-3
+                     sm-only:w-16 sm-only:h-16 sm-only:p-3
+                     w-18 h-18 p-4`}
+            >
+              {/* Efecto de brillo en hover */}
+              <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/20 to-transparent -skew-x-12 transform -translate-x-full hover:translate-x-full transition-transform duration-700"></div>
+
+              <LapizFirmando className="text-white relative z-10 drop-shadow-sm sxs-only:w-6 xs-only:w-7 sm-only:w-8 w-8" />
+
+              {/* Punto de notificación cuando hay tooltip */}
+              {mostrarTooltipActual && (
+                <div
+                  className={`absolute -top-1 -right-1 w-3 h-3 rounded-full border-2 border-white animate-ping
+                         sxs-only:w-2 sxs-only:h-2 ${
+                           estadoBoton.color === "verde"
+                             ? "bg-blue-500"
+                             : "bg-yellow-500"
+                         }`}
+                />
+              )}
+
+              {/* Indicadores de estado */}
+              <div className="absolute -bottom-1 -left-1 flex space-x-1">
+                <div
+                  className={`w-2 h-2 rounded-full border border-white transition-all ${
+                    asistencia.entradaMarcada
+                      ? "bg-green-400 scale-110"
+                      : "bg-gray-400"
+                  }`}
+                  title={
+                    asistencia.entradaMarcada
+                      ? "Entrada registrada"
+                      : "Entrada pendiente"
+                  }
+                />
+                <div
+                  className={`w-2 h-2 rounded-full border border-white transition-all ${
+                    asistencia.salidaMarcada
+                      ? "bg-green-400 scale-110"
+                      : "bg-gray-400"
+                  }`}
+                  title={
+                    asistencia.salidaMarcada
+                      ? "Salida registrada"
+                      : "Salida pendiente"
+                  }
+                />
+              </div>
+            </button>
+          </div>
+        )}
       </>
     );
   }

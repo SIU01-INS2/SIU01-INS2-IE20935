@@ -17,6 +17,10 @@ export class HandlerAsistenciaBase {
     return this.data.DiaEvento;
   }
 
+  public esSemanaDeGestion(): false | RangoFechas {
+    return this.data.Semana_De_Gestion;
+  }
+
   public estaFueraDeAnioEscolar(): false | RangoFechas {
     return this.data.FueraAñoEscolar;
   }

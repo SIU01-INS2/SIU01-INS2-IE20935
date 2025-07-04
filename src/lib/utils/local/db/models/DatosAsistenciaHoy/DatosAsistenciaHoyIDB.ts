@@ -37,11 +37,11 @@ export class DatosAsistenciaHoyIDB {
   private readonly storeName: string = "datos_asistencia_hoy";
   private static readonly STORAGE_KEY = "datos_asistencia_actuales";
   // Constantes para las nuevas keys
-  private static readonly ESTADO_PERSONAL_KEY =
+  private static readonly ESTADO_TOMA_ASISTENCIA_PERSONAL_KEY =
     "estado_toma_asistencia_de_personal";
-  private static readonly ESTADO_SECUNDARIA_KEY =
+  private static readonly ESTADO_TOMA_ASISTENCIA_SECUNDARIA_KEY =
     "estado_toma_asistencia_estudiantes_secundaria";
-  private static readonly ESTADO_PRIMARIA_KEY =
+  private static readonly ESTADO_TOMA_ASISTENCIA_PRIMARIA_KEY =
     "estado_toma_asistencia_estudiantes_primaria";
 
   /**
@@ -427,9 +427,9 @@ export class DatosAsistenciaHoyIDB {
         "readwrite"
       );
       const promises = [
-        this.deleteKey(store, DatosAsistenciaHoyIDB.ESTADO_PERSONAL_KEY),
-        this.deleteKey(store, DatosAsistenciaHoyIDB.ESTADO_SECUNDARIA_KEY),
-        this.deleteKey(store, DatosAsistenciaHoyIDB.ESTADO_PRIMARIA_KEY),
+        this.deleteKey(store, DatosAsistenciaHoyIDB.ESTADO_TOMA_ASISTENCIA_PERSONAL_KEY),
+        this.deleteKey(store, DatosAsistenciaHoyIDB.ESTADO_TOMA_ASISTENCIA_SECUNDARIA_KEY),
+        this.deleteKey(store, DatosAsistenciaHoyIDB.ESTADO_TOMA_ASISTENCIA_PRIMARIA_KEY),
       ];
 
       await Promise.all(promises);
@@ -456,11 +456,11 @@ export class DatosAsistenciaHoyIDB {
   private getKeyPorTipo(tipoAsistencia: TipoAsistencia): string {
     switch (tipoAsistencia) {
       case TipoAsistencia.ParaPersonal:
-        return DatosAsistenciaHoyIDB.ESTADO_PERSONAL_KEY;
+        return DatosAsistenciaHoyIDB.ESTADO_TOMA_ASISTENCIA_PERSONAL_KEY;
       case TipoAsistencia.ParaEstudiantesSecundaria:
-        return DatosAsistenciaHoyIDB.ESTADO_SECUNDARIA_KEY;
+        return DatosAsistenciaHoyIDB.ESTADO_TOMA_ASISTENCIA_SECUNDARIA_KEY;
       case TipoAsistencia.ParaEstudiantesPrimaria:
-        return DatosAsistenciaHoyIDB.ESTADO_PRIMARIA_KEY;
+        return DatosAsistenciaHoyIDB.ESTADO_TOMA_ASISTENCIA_PRIMARIA_KEY;
       default:
         throw new Error("Tipo de estado no reconocido");
     }

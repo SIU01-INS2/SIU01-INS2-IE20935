@@ -17,7 +17,7 @@ export const Entornos_Dominios_SS01: Record<Entorno, string> = {
 };
 
 export const Entornos_BasePaths_SS01: Record<Entorno, string> = {
-  [Entorno.LOCAL]: "",
+  [Entorno.LOCAL]: "/dev/socket.io/",
   [Entorno.DESARROLLO]: "/dev/socket.io/",
   [Entorno.CERTIFICACION]: "/cert/socket.io/",
   [Entorno.TEST]: "",

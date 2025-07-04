@@ -1,9 +1,15 @@
+import {
+  ModoRegistro,
+  modoRegistroTextos,
+} from "@/interfaces/shared/ModoRegistroPersonal";
 import ModalContainer from "../ModalContainer";
 
 const ActivarGPSoBrindarPermisosGPSModal = ({
   eliminateModal,
+  modoRegistro,
 }: {
   eliminateModal: () => void;
+  modoRegistro: ModoRegistro;
 }) => {
   return (
     <ModalContainer eliminateModal={eliminateModal}>
@@ -29,8 +35,10 @@ const ActivarGPSoBrindarPermisosGPSModal = ({
             de <br />
             tu dispositivo o navegador.
             <br />
-            Si sigue fallando, avísale a la <br />
-            directora.
+            Si sigue fallando, registra tu{" "}
+            <b>{modoRegistroTextos[modoRegistro].toLowerCase()}</b>
+            <br />
+            con la directora/subdirectora.
           </p>
         </div>
       </div>

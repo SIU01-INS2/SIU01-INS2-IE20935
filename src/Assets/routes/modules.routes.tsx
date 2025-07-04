@@ -224,7 +224,7 @@ const allSiasisModules: SiasisModule[] = [
     IconTSX: (props: IconProps) => {
       return <RelojTIempo {...props} />;
     },
-    allowedRoles: [RolesSistema.ProfesorSecundaria, RolesSistema.Tutor],
+    allowedRoles: [RolesSistema.ProfesorSecundaria, RolesSistema.Tutor, RolesSistema.PersonalAdministrativo],
     active: true,
   },
 

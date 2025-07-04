@@ -2,7 +2,10 @@ import { useState, useCallback } from "react";
 import ModalContainer from "../ModalContainer";
 import BotonConIcono from "@/components/buttons/BotonConIcono";
 import LapizFirmando from "@/components/icons/LapizFirmando";
-import { ModoRegistro } from "@/interfaces/shared/ModoRegistroPersonal";
+import {
+  ModoRegistro,
+  modoRegistroTextos,
+} from "@/interfaces/shared/ModoRegistroPersonal";
 import { estaDentroDelColegioIE20935 } from "@/lib/helpers/functions/geolocation/getEstadoDeUbicacion";
 import { PuntoGeografico } from "@/interfaces/Geolocalizacion";
 import { verificarDisponibilidadGPS } from "@/lib/helpers/functions/geolocation/verificarDisponibilidadGPS";
@@ -15,10 +18,10 @@ import { Entorno } from "@/interfaces/shared/Entornos";
 // CONSTANTES DE CONFIGURACIÓN
 // ========================================================================================
 export const SOLO_PERMITIR_CELULARES_PARA_ASISTENCIA =
-  ENTORNO !== Entorno.LOCAL; // Cambiar a false para permitir laptops
+  ENTORNO !== Entorno.LOCAL || false; // Cambiar a false para permitir laptops
 
 // 🆕 FUNCIONES DE DESARROLLO - SOLO ACTIVAS EN ENTORNO LOCAL
-export const REQUERIR_VALIDACION_GPS = false; // 🔧 Cambiar a false para saltarse GPS (SOLO en local)
+export const REQUERIR_VALIDACION_GPS = true; // 🔧 Cambiar a false para saltarse GPS (SOLO en local)
 export const USAR_COORDENADAS_MOCKEADAS = false; // 🎭 Cambiar a true para usar coordenadas fake (SOLO en local)
 
 // 🎯 COORDENADAS PARA TESTING (SOLO en local)
@@ -491,13 +494,13 @@ const MarcarAsistenciaPropiaDePersonalModal = ({
               <b>ubicación</b> para{" "}
               <b>
                 registrar tu <br />
-                asistencia
+                asistencia de {modoRegistroTextos[modoRegistro]}
               </b>
               . Asegúrate de <br />
               estar <b>dentro del colegio</b>.
             </>
           ),
-          boton: "Registrar Asistencia",
+          boton: `Registrar ${modoRegistroTextos[modoRegistro]}`,
         };
       }
     }
@@ -512,10 +515,20 @@ const MarcarAsistenciaPropiaDePersonalModal = ({
           {texto}
         </p>
 
-        <b>{modoRegistro}</b>
+        {REQUERIR_VALIDACION_GPS && (
+          <img
+            className="rounded-[5px] w-[11rem] xs:w-[11rem] sm:w-[11.5rem] md:w-[10.5rem] h-auto object-contain"
+            src="/images/gif/UbicacionColegioViajeGuiado.gif"
+            alt="Como llegar al colegio"
+          />
+        )}
 
         <BotonConIcono
-          className="bg-verde-principal text-blanco flex gap-3 px-4 py-2 rounded-md text-sm sm:text-base disabled:opacity-50 disabled:cursor-not-allowed"
+          className={`${
+            modoRegistro === ModoRegistro.Entrada
+              ? "bg-verde-principal"
+              : "bg-rojo-oscuro"
+          } text-blanco flex gap-3 px-4 py-2 rounded-md text-sm sm:text-base disabled:opacity-50 disabled:cursor-not-allowed`}
           texto={boton}
           IconTSX={
             estaProcessando ? (
